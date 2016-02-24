@@ -19,7 +19,7 @@ class Brockman < Sinatra::Base
     TRIP_KEY_CHUNK_SIZE = 500
 
     couch = Couch.new({
-      :host      => $settings[:dbHost],
+      :host      => $settings[:host],
       :login     => $settings[:login],
       :designDoc => $settings[:designDoc],
       :db        => group
