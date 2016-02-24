@@ -21,6 +21,7 @@ require_relative 'utilities/pushUniq'
 require_relative 'utilities/timestamp'
 require_relative 'utilities/zoneTranslate'
 
+require 'base64'
 
 header = <<END
 
@@ -267,12 +268,9 @@ dbs.each { |db|
       subTaskStart = Time.now()
 
       aggregateDocId = "report-aggregate-year#{year}month#{month}"
-      aggregateGeoDocId = "report-aggregate-geo-year#{year}month#{month}"
 
       #duplicate the resultTemplate to store this months data
       result = cloneDeep(resultTemplate)
-      geojson = {}
-      geojson['data'] = []
 
       # Check to see if the aggregate doc already exists
       begin
@@ -476,19 +474,20 @@ dbs.each { |db|
             minuteDuration = (sum['value']['maxTime'].to_i - sum['value']['minTime'].to_i ) / 1000 / 60 / 3600 #TODO: check back on the validity of this
             
             if !groupTimeZone.nil?
-              startDate = Time.at(sum['value']['minTime'].to_i / 1000).getlocal(groupTimeZone).strftime("%Y %b %d %H:%M")
+              startDate = Time.at(sum['value']['minTime'].to_i / 1000).strftime("%Y %b %d %H:%M")
             else 
               startDate = Time.at(sum['value']['minTime'].to_i / 1000).strftime("%Y %b %d %H:%M")
             end
 
-            if !schoolInList
-              point['properties'] = [
-                { 'label' => 'Date',            'value' => startDate },
-                { 'label' => 'Subject',         'value' => subjectLegend[sum['value']['subject']] },
-                { 'label' => 'TAC tutor',       'value' => titleize(sum['value']['user'].downcase) },
-                { 'label' => 'Lesson Week',     'value' => sum['value']['week'] },
-                { 'label' => 'Lesson Day',      'value' => sum['value']['day'] }
-              ]
+            point['properties'] = [
+              { 'label' => 'Date',            'value' => startDate },
+              { 'label' => 'Subject',         'value' => subjectLegend[sum['value']['subject']] },
+              { 'label' => 'Lesson duration', 'value' => "#{minuteDuration} min." },
+              { 'label' => 'Zone',            'value' => sum['value']['zone'] },
+              { 'label' => 'TAC tutor',       'value' => sum['value']['user'] },
+              { 'label' => 'Lesson Week',     'value' => sum['value']['week'] },
+              { 'label' => 'Lesson Day',      'value' => sum['value']['day'] }
+            ]
 
             else 
               point['properties'] = [
@@ -505,6 +504,11 @@ dbs.each { |db|
             geoJSON['byCounty'][countyId]['data'].push point
           end
 
+          result['users']['all'][username]['total']['visits']   += 1
+
+          result['visits']['national']['visits']                                  += 1
+          result['visits']['byCounty'][countyName]['visits']                      += 1 
+          result['visits']['byCounty'][countyName]['zones'][zoneName]['visits']   += 1
 
           #
           # process fluency data
@@ -641,20 +645,48 @@ dbs.each { |db|
       #
       # Saving the generated result back to the server
       couch.putRequest({ 
-        :doc => "#{aggregateDocId}", 
+        :doc => aggregateDocId, 
         :data => result 
       })
 
 
-      geoJSON['byCounty'].map { | countyId, countyData |
-        
-        #Saving the generated Geo result back to the server
+      #
+      # Saving the generated Geo Results back to the server
+      #
+      puts "Saving geojson "
+
+
+      geojsonByCounty.each { | county, doc | 
+        print "#{county} "
+
+        # convert funky chars to base64
+        safeCounty = Base64.urlsafe_encode64 county
+
+        docId = "geojson-year#{year}month#{month}county#{safeCounty}"
+
+        # does the doc already exist?
+        begin
+          oldDoc = couch.getRequest({ 
+            :doc => docId, 
+            :parseJson => true 
+          })
+        rescue => e
+          # no
+          oldDoc = {}
+        end
+
+        # use old _rev to update
+        doc['_rev'] = oldDoc['_rev'] if oldDoc['_rev']
+
+        # save
         couch.putRequest({ 
-          :doc => "#{aggregateGeoDocId}-#{countyId}", 
-          :data => countyData 
+          :doc  => docId, 
+          :data => doc
         })
       
-      }
+      } # end of geojsonByCounty.each 
+
+      print "\n"
 
       puts "      Month Completed - (#{time_diff(Time.now(), subTaskStart)})"
 

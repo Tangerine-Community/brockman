@@ -25,7 +25,7 @@ class Brockman < Sinatra::Base
     TRIP_KEY_CHUNK_SIZE = 500
 
     couch = Couch.new({
-      :host      => $settings[:dbHost],
+      :host      => $settings[:host],
       :login     => $settings[:login],
       :designDoc => $settings[:designDoc],
       :db        => group
@@ -97,10 +97,9 @@ class Brockman < Sinatra::Base
 
 
         dates[TREND_MONTHS]       = { month:month, year:year};
-        dates[TREND_MONTHS].link  = base+'reportData/#{group}/report-aggregate-year#{year.to_i}month#{month.to_i}.json';
-        
-        var skipMonths = [-1,0,4,8,11,12];
-        var skippedMonths = 0;
+        dates[TREND_MONTHS].link  = base+'#{group}/geojson-year#{year.to_i}month#{month.to_i}county#{safeCounty}';
+
+
         // create links for trends by month
         for ( var i = TREND_MONTHS-1; i > 0; i-- ) {
           tgtMonth      = reportMonth.clone().subtract((TREND_MONTHS - i + 1 + skippedMonths), 'months');
@@ -201,6 +200,14 @@ class Brockman < Sinatra::Base
             //tmp['Math Score'] = safeRead(el.data.visits.byCounty[county].fluency,'operation','sum')/safeRead(el.data.visits.byCounty[county].fluency,'operation','size');
             //if(isNaN(tmp['Math Score'])) { delete tmp['Math Score'] };
 
+            var countyVisits = safeRead(el.data.visits.byCounty[county], 'visits');
+            var countyQuota = safeRead(el.data.visits.byCounty[county],'quota');
+            if (countyVisits == 0 || countyQuota == 0)
+            {
+              tmp['Visit Attainment'] = 0;
+            } else {
+              tmp['Visit Attainment'] = countyVisits / countyQuota * 100;
+            }
             
                           
             datasetScores.push(tmp);
@@ -608,7 +615,7 @@ class Brockman < Sinatra::Base
             ;
 
 
-            L.Icon.Default.imagePath = 'http://ntp.tangerinecentral.org/images/leaflet'
+            L.Icon.Default.imagePath = 'http://malawi.tangerinecentral.org/images/leaflet'
 
             window.map = new L.Map('map');
 
