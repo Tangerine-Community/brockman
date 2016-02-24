@@ -74,7 +74,7 @@ class Brockman < Sinatra::Base
         <thead>
           <tr>
             <th>District</th>
-            <th class='custSort'>Number of Schools Visited</th>
+            <th class='custSort'>Number of School Visits</th>
             <th class='custSort'>Number of Observations Completed</th>
           </tr>
         </thead>
@@ -89,13 +89,13 @@ class Brockman < Sinatra::Base
             "
               <tr>
                 <td>#{titleize(districtName)}</td>
-                <td>#{visits} Schools</td>
+                <td>#{visits} Visits</td>
                 <td>#{observations} Observations</td>
               </tr>
             "}.join }
             <tr>
               <td>All</td>
-              <td>#{result['visits']['national']['visits']} Schools</td>
+              <td>#{result['visits']['national']['visits']} Visits</td>
               <td>#{result['visits']['national']['observations']} Observations</td>
             </tr>
         </tbody>
@@ -116,7 +116,7 @@ class Brockman < Sinatra::Base
         <thead>
           <tr>
             <th>Zone</th>
-            <th class='custSort'>Number of Schools Visited</th>
+            <th class='custSort'>Number of School Visits</th>
             <th class='custSort'>Number of Observations Completed</th>
           </tr>
         </thead>
@@ -132,8 +132,38 @@ class Brockman < Sinatra::Base
 
           "
             <tr> 
-              <td>#{zoneName}</td>
-              <td>#{visits} Schools</td>
+              <td>#{titleize(zoneName)}</td>
+              <td>#{visits} Visits</td>
+              <td>#{observations} Observations</td>
+            </tr>
+          "}.join }
+        </tbody>
+      </table>
+
+    "
+
+    peaTableHtml = "
+      <table>
+        <thead>
+          <tr>
+            <th>PEA</th>
+            <th class='custSort'>Number of School Visits</th>
+            <th class='custSort'>Number of Observations Completed</th>
+          </tr>
+        </thead>
+        <tbody>
+          #{result['all'].map{ | username, user |
+
+            row += 1
+
+            visits        = user['schoolsVisited']
+            observations  = user['observations']
+            
+
+          "
+            <tr> 
+              <td>#{titleize(username)}</td>
+              <td>#{visits} Visits</td>
               <td>#{observations} Observations</td>
             </tr>
           "}.join }
@@ -192,7 +222,7 @@ class Brockman < Sinatra::Base
       </head>
 
       <body>
-        <h1><img style='vertical-align:middle;' src=\"#{$settings[:basePath]}/images/corner_logo.png\" title=\"Go to main screen.\"> Malawi Tutor</h1>
+        <h1><img style='vertical-align:middle;' src=\"#{$settings[:basePath]}/images/corner_logo.png\" title=\"Go to main screen.\"> Malawi Tutor (#{year} #{["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][month.to_i]})</h1>
   
         <label for='year-select'>Year</label>
         <select id='year-select'>
@@ -223,10 +253,14 @@ class Brockman < Sinatra::Base
 
         <h2>
           #{titleize(currentDistrictName)} District Report
-          #{year} #{["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][month.to_i]}
         </h2>
         #{zoneTableHtml}
         
+        <h2>
+          PEA Report
+        </h2>
+        #{peaTableHtml}
+
         </body>
       </html>
       "

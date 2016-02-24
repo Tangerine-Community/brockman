@@ -210,7 +210,6 @@ class MalawiTutorReports
           districtId    = templates['locationBySchool'][o['schoolId']]['districtId']    || ""
           monthData['result']['visits']['byDistrict'][districtId]['observations']                   += 1
           monthData['result']['visits']['byDistrict'][districtId]['zones'][zoneId]['observations']  += 1
-          monthData['result']['visits']['national']['visits']                                       += 1
           monthData['result']['visits']['national']['observations']                                 += 1
         }
 
@@ -223,6 +222,7 @@ class MalawiTutorReports
 
           monthData['result']['visits']['byDistrict'][districtId]['visits']                   += 1
           monthData['result']['visits']['byDistrict'][districtId]['zones'][zoneId]['visits']  += 1
+          monthData['result']['visits']['national']['visits']                                 += 1
         }
       }
     }

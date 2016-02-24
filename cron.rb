@@ -274,7 +274,7 @@ groups.each { |group|
       puts "Putting result Doc: #{aggregateDocId}"
       couch.putRequest({ 
         :doc => "#{aggregateDocId}", 
-        :data => monthData['result'] 
+        :data => monthData['result'].merge(monthData['users']) 
       })
 
 
