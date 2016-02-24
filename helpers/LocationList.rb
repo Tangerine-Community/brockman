@@ -5,14 +5,15 @@ class LocationList
 
   def initialize( options )
     @couch = options[:couch]
-    @locationListDoc = @couch.getRequest({ 
-      :doc => "location-list", 
-      :parseJson => true 
-    })
+    # @locationListDoc = @couch.getRequest({ 
+    #   :doc => "location-list", 
+    #   :parseJson => true 
+    # })
 
     @locationIndex ||= {}
+    @locations       = {} # @locationListDoc["locations"] || {}
 
-    indexLocations(@locationListDoc["locations"], 0, [])
+    indexLocations(@locations, 0, [])
   end
 
   def indexLocations( node, depth, locMap )
