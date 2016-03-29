@@ -4,3 +4,5 @@
 
 config.rb
 *.log
+.idea
+nohup.out
