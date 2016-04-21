@@ -11,6 +11,7 @@ class Csv
     @couch = options[:couch]
     @name  = options[:name]
     @path  = options[:path]
+    @locationList  = options[:locationList]
     @cachedResults = {}
 
   end
@@ -80,17 +81,41 @@ class Csv
           if isTimeRelated && isntFalsy && groupTimeZone.nil?  then value = Time.at(value.to_i / 1000).strftime("%yy %mm %dd %Hh %Mm") end
           if isTimeRelated && isntFalsy && !groupTimeZone.nil? then value = Time.at(value.to_i / 1000).getlocal(groupTimeZone).strftime("%yy %mm %dd %Hh %Mm") end
 
+          # Hack for handling location
+          requireLocationFetch = key.match(/locationIndex/)
+
+          if requireLocationFetch then
+            #puts "fetching location - locationIndex - #{value}"
+            locationData = @locationList.retrieveLocation(value.split('-').last)
+            #puts "locationData: #{locationData}"
+
+            for pair in locationData
+              locCol = pair.first.gsub "Label", "Name"
+              locVal = pair.last
+
+              unless indexByMachineName["#{machineName}-#{locCol}"] # Have we seen the machine name before?
+                machineNames.push "#{machineName}-#{locCol}"
+                indexByMachineName["#{machineName}-#{locCol}"] = machineNames.index("#{machineName}-#{locCol}")
+                columnNames.push locCol
+              end
+
+              index = indexByMachineName["#{machineName}-#{locCol}"]
+              row[index] = locVal
+            end
+          else
+
+            # puts "Col: #{key}, Val: #{value}"
           unless indexByMachineName[machineName] # Have we seen the machine name before?
             machineNames.push machineName
-            columnNames.push key
             indexByMachineName[machineName] = machineNames.index(machineName)
-
+              columnNames.push key
           end
 
           index = indexByMachineName[machineName]
 
           row[index] = value
 
+        end
         end
 
       }

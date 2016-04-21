@@ -1,3 +1,6 @@
+# encoding: utf-8
+require 'base64'
+require 'date'
 require_relative '../helpers/Couch'
 require_relative '../utilities/countyTranslate'
 require_relative '../utilities/zoneTranslate'
@@ -7,328 +10,107 @@ class Brockman < Sinatra::Base
   
   get '/email/:email/:group/:workflowIds/:year/:month/:county.?:format?' do | email, group, workflowIds, year, month, county, format |
 
-    return if format.match(/png/)
+    format = "html" unless format == "json"
+
+    countyId = county
 
     requestId = SecureRandom.base64
 
-    $logger.info "email - #{group}"
+    TRIP_KEY_CHUNK_SIZE = 500
 
     couch = Couch.new({
-      :host      => $settings[:host],
+      :host      => $settings[:dbHost],
       :login     => $settings[:login],
       :designDoc => $settings[:designDoc],
       :db        => group
     })
 
-    # @hardcode who is formal
-    formalZones = {
-      "waruku"    => true,
-      "posta"     => true,
-      "silanga"   => true,
-      "kayole"    => true,
-      "gichagi"   => true,
-      "congo"     => true,
-      "zimmerman" => true,
-      "chokaa"    => true
-    }
-
     subjectLegend = { "english_word" => "English", "word" => "Kiswahili", "operation" => "Maths" }
 
-    geography = couch.getRequest( { :doc => "geography-quotas", :parseJson => true } )
-    quotasByZones  = {}
-    quotasByCounty = {}
-    quotaNational = 0
-
-    geography['counties'].map { | countyName, county |
-      countyName = countyTranslate(countyName.downcase)
-      quotasByCounty[countyName] = county['quota']
-      county['zones'].map { | zone, quota |
-        zone = zoneTranslate(zone)
-        quotasByZones[zone.downcase] = quota
-        quotaNational += quota.to_i
-      }
-    }
-
-    byZone = {}
-
-    # get trips from month specified
-    monthKeys = ["year#{year}month#{month}"]
-    
-    tripsFromMonth  = couch.postRequest({ 
-      :view => "tutorTrips", 
-      :data => { "keys" => monthKeys }, 
-      :params => {"reduce"=>false}, 
-      :categoryCache => true,
-      :parseJson=>true 
-    } )
-
-    tripIds = tripsFromMonth['rows'].map{ |e| e['value'] }
-
-
-    # if workflows specified, filter trips to those workflows
-    if workflowIds != "all"
-
-      workflowKey = workflowIds.split(",").map{ |s| "workflow-#{s}" }
-      allRows = []
-      workflowIds.split(",").each { |workflowId|
-
-        workflowResponse = couch.postRequest({ 
-          :view => "tutorTrips", 
-          :data => { "keys" => ["workflow-#{workflowId}"] }, 
-          :params => { "reduce" => false },
-          :parseJson => true,
-          :categoryCache => true
-        } )
-
-        allRows += workflowResponse['rows']
-      }
-      #byworkflowidresponse = couch.postRequest({ :view => "tutorTrips", :data => { "keys" => workflowKey }, :parseJson => true } )
-
-      tripsFromWorkflow = allRows.map{ |e| e['value'] }
-      tripIds           = tripIds & tripsFromWorkflow
-
-    end
-
-    tripKeys      = tripIds.uniq
-
-    # break trip keys into chunks
-    tripKeyChunks = tripKeys.each_slice(TRIP_KEY_CHUNK_SIZE).to_a
-
-    # define scope for result
-    result ||= {}
-    result['fluency']       ||= {}
-    result['visits']        ||= {}
-    result['metBenchmark']  ||= {}
-    result['zonesByCounty'] ||= {}
-    zones = []
-    geojson = []
-
-    # hash for optimization
-    subjectsExists = {}
-    zoneCountyExists = {
-    }
-
-
     #
-    # Get chunks of trips and work on the result
+    # get Group settings
     #
-
-    tripKeyChunks.each { | tripKeys |
-
-      # get the real data
-      tripsResponse = couch.postRequest({
-        :view => "spirtRotut",
-        :params => {"group"=>true},
-        :data => { "keys" => tripKeys },
-        :parseJson => true,
-        :cache => true
-      } )
-      tripRows = tripsResponse['rows']
+    groupSettings = couch.getRequest({ :doc => 'settings', :parseJson => true })
+    groupTimeZone = groupSettings['timeZone']
 
       #
-      # filter rows
+    # Get quota information
       #
-
-      tripRows = tripRows.select { | row |
-        longEnough = ( row['value']['maxTime'].to_i - row['value']['minTime'].to_i ) / 1000 / 60 >= 20
-        longEnough
-      }
-
-      #
-      # result['visit']
-      #
-      result['visits']['byZone']   ||= {}
-      result['visits']['byCounty'] ||= {}
-      result['visits']['national'] ||= 0
-
-      for sum in tripRows
-        next if sum['value']['zone'].nil?
-        zoneName   = zoneTranslate(sum['value']['zone'].downcase)
-        countyName = countyTranslate(sum['value']['county'].downcase)
-
-        result['visits']['byZone'][zoneName] ||= 0
-        result['visits']['byZone'][zoneName] += 1
-
-        result['visits']['byCounty'][countyName] ||= 0
-        result['visits']['byCounty'][countyName] += 1
-
-        result['visits']['national'] += 1 
-
+    begin
+      reportSettings = couch.getRequest({ :doc => "report-aggregate-settings", :parseJson => true })
+      result = couch.getRequest({ :doc => "report-aggregate-year#{year}month#{month}", :parseJson => true })
+    rescue => e
+      # the doc doesn't already exist
+      puts e
+      return invalidReport()
       end
 
+    currentCountyId       = nil
+    currentCounty         = nil
+    currentCountyName     = nil
 
-      #
-      # result['fluency']
-      #
-
-      result['fluency']['byZone']   ||= {}
-      result['fluency']['byCounty'] ||= {}
-      result['fluency']['national'] ||= {}
-      result['fluency']['subjects'] ||= []
-
-      for sum in tripRows
-        next if sum['value']['zone'].nil? or sum['value']['itemsPerMinute'].nil?
-
-        next if sum['value']['subject'].nil? or sum['value']['subject'] == "" 
-
-        zoneName   = zoneTranslate(sum['value']['zone'].downcase)
-        countyName = countyTranslate(sum['value']['county'].downcase)
-        itemsPerMinute = sum['value']['itemsPerMinute']
-        benchmarked    = sum['value']['benchmarked']
-
-        subject = sum['value']['subject']
-
-        pushUniq result['fluency']['subjects'], subject, subjectsExists
-
-        if subjectsExists[subject].nil?
-          result['fluency']['subjects'].push subject
-          subjectsExists[subject] = true
-        end
-
-        total = 0
-        itemsPerMinute.each { | ipm | total += ipm }
-
-        result['fluency']['byZone'][zoneName]                  ||= {}
-        result['fluency']['byZone'][zoneName][subject]         ||= {}
-        result['fluency']['byZone'][zoneName][subject]['sum']  ||= 0
-        result['fluency']['byZone'][zoneName][subject]['size'] ||= 0
-
-        result['fluency']['byZone'][zoneName][subject]['sum']  += total
-        result['fluency']['byZone'][zoneName][subject]['size'] += benchmarked
-
-        result['fluency']['byCounty'][countyName]                  ||= {}
-        result['fluency']['byCounty'][countyName][subject]         ||= {}
-        result['fluency']['byCounty'][countyName][subject]['sum']  ||= 0
-        result['fluency']['byCounty'][countyName][subject]['size'] ||= 0
-
-        result['fluency']['byCounty'][countyName][subject]['sum']  += total
-        result['fluency']['byCounty'][countyName][subject]['size'] += benchmarked
-
-        result['fluency']['national']                  ||= {}
-        result['fluency']['national'][subject]         ||= {}
-        result['fluency']['national'][subject]['sum']  ||= 0
-        result['fluency']['national'][subject]['size'] ||= 0
-
-        result['fluency']['national'][subject]['sum']  += total
-        result['fluency']['national'][subject]['size'] += benchmarked
-
-      end
-
-      result['fluency']['subjects'] = result['fluency']['subjects'].select  { |x| subjectLegend.keys.include? x }
-      result['fluency']['subjects'] = result['fluency']['subjects'].sort_by { |x| subjectLegend.keys.index(x) }
-
-
-      #
-      # result['metBenchmark']
-      #
-
-      result['metBenchmark']['byZone']   ||= {}
-      result['metBenchmark']['byCounty'] ||= {}
-      result['metBenchmark']['national'] ||= {}
-
-      for sum in tripRows
-
-        next if sum['value']['zone'].nil? or sum['value']['subject'].nil?
-
-        zoneName   = zoneTranslate(sum['value']['zone'].downcase)
-        countyName = countyTranslate(sum['value']['county'].downcase)
-        subject    = sum['value']['subject'].downcase
-
-        met = sum['value']['metBenchmark']
-
-        result['metBenchmark']['byZone'][zoneName]          ||= {}
-        result['metBenchmark']['byZone'][zoneName][subject] ||= 0
-        result['metBenchmark']['byZone'][zoneName][subject] += met
-
-        result['metBenchmark']['byCounty'][countyName]          ||= {}
-        result['metBenchmark']['byCounty'][countyName][subject] ||= 0
-        result['metBenchmark']['byCounty'][countyName][subject] += met
-
-        result['metBenchmark']['national'][subject] ||= 0
-        result['metBenchmark']['national'][subject] += met
-
-      end
-
-      #
-      # result['zonesByCounty']
-      #
-
-      for sum in tripRows
-
-        next if sum['value']['zone'].nil?
-
-        zoneName   = zoneTranslate(sum['value']['zone'].downcase)
-        countyName = countyTranslate(sum['value']['county'].downcase)
-
-        result['zonesByCounty'][countyName] ||= []
-        zoneCountyExists[countyName] ||= {}
-        pushUniq result['zonesByCounty'][countyName], zoneName, zoneCountyExists[countyName]
-
-      end
+    #ensure that the county in the URL is valid - if not, select the first
+    if result['visits']['byCounty'][countyId].nil?
+      result['visits']['byCounty'].find { |countyId, county|
+        currentCountyId   = countyId
+        currentCounty     = county
+        currentCountyName = county['name']
+        true
     }
-
-    # if there are no zones make sure there are...no zones
-    if ! result['zonesByCounty'][county.downcase].nil?
-      zones = result['zonesByCounty'][county.downcase].sort_by{|word| word.downcase}
     else
-      zones = []
+      currentCountyId   = countyId
+      currentCounty     = result['visits']['byCounty'][countyId]
+      currentCountyName = currentCounty['name']
     end
 
     legendHtml = "
       <small>
         <ol>
-          <li id='footer-note-1'><b>Number of classroom visits</b> are defined as Full PRIMR or Best Practices classroom observations that include all forms and all 3 assessments, with at least 20 minutes duration, and took place between 7AM and 2PM of any calendar day during the selected month.</li>
-          <li id='footer-note-2'><b>Targeted number of classroom visits</b> is equivalent to the number of class 1 and class 2 teachers in each zone.</li>
+        <li id='footer-note-1'><b>Numbers of classroom visits are</b> defined as TUSOME classroom observations that include all forms and all 3 pupils assessments, with at least 20 minutes duration, and took place between 7AM and 3.10PM of any calendar day during the selected month.</li>
+        <li id='footer-note-2'><b>Targeted number of classroom visits</b> is equivalent to the number of class 1 teachers in each zone.</li>
           <li id='footer-note-3'><b>Correct per minute</b> is the calculated average out of all individual assessment results from all qualifying classroom visits in the selected month to date, divided by the total number of assessments conducted.</li>
           <li id='footer-note-4'><b>Percentage at KNEC benchmark</b> is the percentage of those students that have met the KNEC benchmark for either Kiswahili or English, and for either class 1 or class 2, out of all of the students assessed for those subjects.</li>
         </ol>
-        <ul style='list-style:none;'>
-          <li><b>*</b> Non-formal</li>
-        </ul>
       </small>
     "
 
-    
+    #retrieve a county list for the select and sort it
+    countyList = []
+    result['visits']['byCounty'].map { |countyName, county| countyList.push countyName }
+    countyList.sort!
+
 
     row = 0
-    zoneTableHtml = "
-      <table class='dataTable'>
+    countyTableHtml = "
+      <table>
         <thead>
           <tr>
-            <th class='sorting'>Zone</th>
-            <th class='sorting'>Number of classroom visits <a href='#footer-note-1'><sup>[1]</sup></a></th>
-            <th class='sorting'>Targeted number of classroom visits<a href='#footer-note-2'><sup>[2]</sup></a></th>
-            #{result['fluency']['subjects'].select{|x|x!="3" && !x.nil?}.map{ | subject |
-              "<th class='sorting'>#{subjectLegend[subject]}<br>Correct per minute<a href='#footer-note-3'><sup>[3]</sup></a><br>#{"<small>( Percentage at KNEC benchmark<a href='#footer-note-4'><sup>[4]</sup></a>)</small>" if subject != "operation"}</th>"
+            <th>County</th>
+            <th class='custSort'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
+            <small>( Percentage of Target Visits)</small></th>
+            #{reportSettings['fluency']['subjects'].map{ | subject |
+              "<th class='custSort'>#{subjectLegend[subject]}<br>
+                Correct per minute<a href='#footer-note-3'><sup>[3]</sup></a><br>
+                #{"<small>( Percentage at KNEC benchmark<a href='#footer-note-4'><sup>[4]</sup></a>)</small>" if subject != "operation"}
+              </th>"
             }.join}
           </tr>
         </thead>
         <tbody>
-          #{zones.map{ |zone|
+          #{ result['visits']['byCounty'].map{ | countyId, county |
 
-            row += 1
-
-            zone = zone.downcase
-
-            next if result['fluency']['byZone'][zone].nil?
-
-            visits = result['visits']['byZone'][zone]
-
-            met = result['metBenchmark']['byZone'][zone]
-
-            quota = quotasByZones[zone]
-
+            countyName      = county['name']
+            visits          = county['visits']
+            quota           = county['quota']
             sampleTotal = 0
 
-            nonFormalAsterisk = if formalZones[zone.downcase] then "<b>*</b>" else "" end
-
           "
-            <tr class='#{if row % 2 == 0 then "even" else "odd" end }'> 
-              <td>#{zone.capitalize} #{nonFormalAsterisk}</td>
-              <td>#{visits}</td>
-              <td>#{quota}</td>
-              #{result['fluency']['subjects'].select{|x|x!="3" && !x.nil?}.map{ | subject |
-                sample = result['fluency']['byZone'][zone][subject]
+              <tr>
+                <td>#{titleize(countyName)}</td>
+                <td>#{visits} ( #{percentage( quota, visits )}% )</td>
+                #{reportSettings['fluency']['subjects'].map{ | subject |
+                  #ensure that there, at minimum, a fluency category for the county
+                  sample = county['fluency'][subject]
                 if sample.nil?
                   average = "no data"
                 else
@@ -340,42 +122,58 @@ class Brockman < Sinatra::Base
                     average = '0'
                   end
 
-                  if subject != 'operation'
-                    benchmark = result['metBenchmark']['byZone'][zone][subject]
-                    percentage = percentage( sample['size'], benchmark )
-                    benchmarks = "( #{percentage}% )"
+                    if subject != "operation"
+                      benchmark = sample['metBenchmark']
+                      percentage = "( #{percentage( sample['size'], benchmark )}% )"
                   end
 
                 end
-
-                "<td>#{average} #{benchmarks}</td>"
+                  "<td>#{average} <span>#{percentage}</span></td>"
               }.join}
 
             </tr>
           "}.join }
+            <tr>
+              <td>All</td>
+              <td>#{result['visits']['national']['visits']} ( #{percentage( result['visits']['national']['quota'], result['visits']['national']['visits'] )}% )</td>
+              #{reportSettings['fluency']['subjects'].map{ | subject |
+                sample = result['visits']['national']['fluency'][subject]
+                if sample.nil?
+                  average = "no data"
+                else
+                  if sample && sample['size'] != 0 && sample['sum'] != 0
+                    average = ( sample['sum'] / sample['size'] ).round
+                  else
+                    average = '0'
+                  end
+
+                  if subject != "operation"
+                    benchmark = sample['metBenchmark']
+                    percentage = "( #{percentage( sample['size'], benchmark )}% )"
+                  end
+                end
+                "<td>#{average} <span>#{percentage}</span></td>"
+              }.join}
+            </tr>
         </tbody>
       </table>
       #{legendHtml}
     "
 
-    zoneHtml = "
-      <h2>
-        #{county.capitalize} County Report
-        #{year} #{["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][month.to_i]}
-      </h2>
-      #{zoneTableHtml}
-    "
-
-    row = 0
-    countiesTableHtml = "
-      <table class='dataTable'>
+    emptyCounty = {
+      "zones" => []
+    }
+    zoneTableHtml = "
+      <h2>Report for #{titleize(currentCountyName)} county</h2>
+      <table>
         <thead>
           <tr>
-            <th class='sorting'>County</th>
-            <th class='sorting'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a></th>
-            <th class='sorting'>Targeted number of classroom visits<a href='#footer-note-2'><sup>[2]</sup></a></th>
-            #{result['fluency']['subjects'].map{ | subject |
-              "<th class='sorting'>#{subjectLegend[subject]}<br>
+            <th>Zone</th>
+            <th class='custSort'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
+            <small>( Percentage of Target Visits)</small></th>
+            #{reportSettings['fluency']['subjects'].select{|x|x!="3" && !x.nil?}.map{ | subject |
+              "<th class='custSort'>
+                #{subjectLegend[subject]}<br>
                 Correct per minute<a href='#footer-note-3'><sup>[3]</sup></a><br>
                 #{"<small>( Percentage at KNEC benchmark<a href='#footer-note-4'><sup>[4]</sup></a>)</small>" if subject != "operation"}
               </th>"
@@ -383,25 +181,25 @@ class Brockman < Sinatra::Base
           </tr>
         </thead>
         <tbody>
-          #{ result['visits']['byCounty'].map{ | county, visits |
+          #{result['visits']['byCounty'][currentCountyId]['zones'].map{ | zoneId, zone |
 
             row += 1
 
-            county = county.downcase
-
-            met = result['metBenchmark']['byCounty'][county]
-
-            quota = quotasByCounty[county]
-
+            zoneName = zone['name']
+            visits = zone['visits']
+            quota = zone['quota']
+            met = zone['fluency']['metBenchmark']
             sampleTotal = 0
 
+            # Do we still need this?
+            #nonFormalAsterisk = if formalZones[zone.downcase] then "<b>*</b>" else "" end
+
           "
-            <tr class='#{if row % 2 == 0 then "even" else "odd" end }'>
-              <td>#{county.capitalize}</td>
-              <td>#{visits}</td>
-              <td>#{quota}</td>
-              #{result['fluency']['subjects'].map{ | subject |
-                sample = result['fluency']['byCounty'][county][subject]
+            <tr>
+              <td>#{zoneName}</td>
+              <td>#{visits} ( #{percentage( quota, visits )}% )</td>
+              #{reportSettings['fluency']['subjects'].select{|x|x!="3" && !x.nil?}.map{ | subject |
+                sample = zone['fluency'][subject]
                 if sample.nil?
                   average = "no data"
                 else
@@ -412,33 +210,25 @@ class Brockman < Sinatra::Base
                     average = '0'
                   end
 
-                  if subject != "operation"
-                    benchmark = result['metBenchmark']['byCounty'][county][subject]
+                  if subject != 'operation'
+                    benchmark = sample['metBenchmark']
                     percentage = "( #{percentage( sample['size'], benchmark )}% )"
                   end
                 end
-                "<td>#{average} #{percentage}</td>"
+
+                "<td>#{average} <span>#{percentage}</span></td>"
               }.join}
             </tr>
           "}.join }
         </tbody>
       </table>
       #{legendHtml}
-
-    "
-
-    countiesHtml = "
-      <h2>
-        #{county.capitalize} County Report
-        #{year} #{["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][month.to_i]}
-      </h2>
-      #{countiesTableHtml}
     "
 
     if county.downcase != "all"
-      contentHtml = zoneHtml
+      contentHtml = zoneTableHtml
     else
-      contentHtml = countiesHtml
+      contentHtml = countyTableHtml
     end
 
     html =  "
@@ -452,10 +242,10 @@ class Brockman < Sinatra::Base
         </head>
 
         <body>
-          <h1><img style='vertical-align:middle;' src=\"http://databases.tangerinecentral.org/tangerine/_design/ojai/images/corner_logo.png\" title=\"Go to main screen.\"> Kenya National Tablet Programme</h1>
+          <h1><img style='vertical-align:middle;' src=\"http://databases.tangerinecentral.org/tangerine/_design/ojai/images/corner_logo.png\" title=\"Go to main screen.\"> TUSOME</h1>
 
           #{contentHtml}
-          <p><a href='http://databases.tangerinecentral.org/_csv/report/#{group}/#{workflowIds}/#{year}/#{month}/#{county}.html'>View map and details</a></p>
+          <p><a href='http://ntp.tangerinecentral.org/_csv/report/#{group}/#{workflowIds}/#{year}/#{month}/#{currentCountyId}.html'>View map and details</a></p>
         </body>
       </html>
     "
@@ -467,13 +257,18 @@ class Brockman < Sinatra::Base
     mailHtml = premailer.to_inline_css
 
     if county.downcase != "all"
-      emailSubject = "Report for #{county.capitalize} county"
+      emailSubject = "Report for #{currentCountyName} County"
     else
-      emailSubject = "County report"
+      emailSubject = "County Report"
     end
 
     if email
       
+
+      email.force_encoding("UTF-8")
+      emailSubject.force_encoding("UTF-8")
+      mailHtml.force_encoding("UTF-8")
+      File.open('special.log', 'w') { |file| file.write("#{email.encoding}\n#{emailSubject.encoding}\n#{mailHtml.encoding}") }
       mail = Mail.deliver do
         to      email
         from    'Tablets Programme <no-reply@tangerinecentral.org>'
@@ -488,7 +283,7 @@ class Brockman < Sinatra::Base
     end
 
     if format == "json"
-      return { 'sent' => true }.to_json
+      return { 'sent' => true, 'mail' => mail.to_s }.to_json
     else
       mailHtml
     end
