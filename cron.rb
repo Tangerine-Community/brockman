@@ -11,7 +11,7 @@
 # 2. tutorTrips by year+month
 # 3. tutorTrips by workflowId
 # The union of the latter two will give a list of 
-require 'base64'
+
 require_relative 'config.rb'
 require_relative 'helpers/Couch'
 require_relative 'helpers/CouchIterator'
@@ -21,6 +21,7 @@ require_relative 'utilities/pushUniq'
 require_relative 'utilities/timestamp'
 require_relative 'utilities/zoneTranslate'
 
+require 'base64'
 
 header = <<END
 
@@ -33,8 +34,8 @@ END
 
 puts header
 
-dbs             = [ 'group-national_tablet_program' ] #[ 'group-tangent_6m_complete' ] #'group-tangent_1m_complete', 'group-tangent_2m_complete' ]
-years           = [ 2014, 2015, 2016 ]
+dbs             = [ 'group-tangent_2m_complete' ] #[ 'group-tangent_6m_complete' ] #'group-tangent_1m_complete', 'group-tangent_2m_complete' ]
+years           = [ 2014, 2015 ]
 months          = [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 ]
 workflowIds     = ["00b0a09a-2a9f-baca-2acb-c6264d4247cb","c835fc38-de99-d064-59d3-e772ccefcf7d"]
 subjectLegend   = { "english_word" => "English", "word" => "Kiswahili", "operation" => "Maths" } 
@@ -55,7 +56,7 @@ dbs.each { |db|
   dbStart = Time.now()
 
   couch = Couch.new({
-    :host      => $settings[:dbHost],
+    :host      => $settings[:host],
     :login     => $settings[:login],
     :designDoc => $settings[:designDoc],
     :db        => db
@@ -63,17 +64,19 @@ dbs.each { |db|
 
   puts "\n- Caching Trips: "
   taskStart = Time.now()
-
+=begin
   workflowIds.each { |workflowId|
 
     puts "\n    Processing Workflow: #{workflowId}"
     subTaskStart = Time.now()
 
-    tripsRequest = JSON.parse(couch.postRequest({
+    tripsRequest = couch.postRequest({
       :view => "tutorTrips",
       :params => {"reduce" => false},
-      :data => {"keys" => ["workflow-#{workflowId}"]}
-    }))
+      :data => {"keys" => ["workflow-#{workflowId}"]},
+      :parseJson => true
+    })
+
     hTripIds = {}
     tripsRequest['rows'].each { |row| hTripIds[row['value']] = true}
     aTripIds      = hTripIds.keys
@@ -97,6 +100,8 @@ dbs.each { |db|
   }
   
   puts "\n    Caching Trips Completed - (#{time_diff(Time.now(), taskStart)})"
+
+=end
 
 #
 #
@@ -131,11 +136,9 @@ dbs.each { |db|
   taskStart = Time.now()
 
   schoolList = couch.getRequest({ 
-    :doc => "location-list", 
+    :doc => "school-list", 
     :parseJson => true 
   })
-
-  locationBySchool                                      ||= {}
 
   # define scope for result
   resultTemplate                                        ||= {}
@@ -154,54 +157,41 @@ dbs.each { |db|
   resultTemplate['compensation']['byCounty']   ||= {}
   resultTemplate['compensation']['national']   ||= 0
 
-  # define scope or the geoJSON files
-  geoJSON               ||= {}
-  geoJSON['byCounty']   ||= {}
-
   #
   # Retrieve Shool Locations and Quotas
   #
 
   # Init the data structures based on the school list 
-  schoolList['locations'].map { | countyId, county |
-    resultTemplate['visits']['byCounty'][countyId]                  ||= {}
-    resultTemplate['visits']['byCounty'][countyId]['name']          ||= county['label']
-    resultTemplate['visits']['byCounty'][countyId]['zones']         ||= {}
-    resultTemplate['visits']['byCounty'][countyId]['visits']        ||= 0
-    resultTemplate['visits']['byCounty'][countyId]['quota']         ||= 0
-    resultTemplate['visits']['byCounty'][countyId]['compensation']  ||= 0
-    resultTemplate['visits']['byCounty'][countyId]['fluency']       ||= {}
+  schoolList['counties'].map { | countyName, county |
+    countyName = countyTranslate( countyName.downcase )
 
-    resultTemplate['visits']['byCounty'][countyId]['quota'] = county['quota']
+    resultTemplate['visits']['byCounty'][countyName]                  ||= {}
+    resultTemplate['visits']['byCounty'][countyName]['zones']         ||= {}
+    resultTemplate['visits']['byCounty'][countyName]['visits']        ||= 0
+    resultTemplate['visits']['byCounty'][countyName]['quota']         ||= 0
+    resultTemplate['visits']['byCounty'][countyName]['compensation']  ||= 0
+    resultTemplate['visits']['byCounty'][countyName]['fluency']       ||= {}
+
+    resultTemplate['visits']['byCounty'][countyName]['quota'] = county['quota']
 
     #manually flatten out the subCounty data level
-    county['children'].map { | subCountyId, subCounty | 
-      subCounty['children'].map { | zoneId, zone |
-        resultTemplate['visits']['byCounty'][countyId]['zones'][zoneId]                   ||= {}
-        resultTemplate['visits']['byCounty'][countyId]['zones'][zoneId]['name']           ||= zone['label']
-        resultTemplate['visits']['byCounty'][countyId]['zones'][zoneId]['trips']          ||= []
-        resultTemplate['visits']['byCounty'][countyId]['zones'][zoneId]['visits']         ||= 0
-        resultTemplate['visits']['byCounty'][countyId]['zones'][zoneId]['quota']          ||= 0
-        resultTemplate['visits']['byCounty'][countyId]['zones'][zoneId]['compensation']   ||= 0
-        resultTemplate['visits']['byCounty'][countyId]['zones'][zoneId]['fluency']        ||= {}
+    county['subCounties'].map { | subCountyName, subCounty | 
+      subCounty['zones'].map { | zoneName, zone |
+        zoneName = zoneTranslate(zoneName.downcase)
 
-        resultTemplate['visits']['byCounty'][countyId]['zones'][zoneId]['quota']  += zone['quota'].to_i
-        resultTemplate['visits']['national']['quota']                             += zone['quota'].to_i
+        resultTemplate['visits']['byCounty'][countyName]['zones'][zoneName]                   ||= {}
+        resultTemplate['visits']['byCounty'][countyName]['zones'][zoneName]['trips']          ||= []
+        resultTemplate['visits']['byCounty'][countyName]['zones'][zoneName]['visits']         ||= 0
+        resultTemplate['visits']['byCounty'][countyName]['zones'][zoneName]['quota']          ||= 0
+        resultTemplate['visits']['byCounty'][countyName]['zones'][zoneName]['compensation']   ||= 0
+        resultTemplate['visits']['byCounty'][countyName]['zones'][zoneName]['fluency']        ||= {}
+
+        resultTemplate['visits']['byCounty'][countyName]['zones'][zoneName]['quota']  += zone['quota'].to_i
+        resultTemplate['visits']['national']['quota']                                 += zone['quota'].to_i
 
         #init container for users
-        resultTemplate['users'][countyId]                   ||= {}
-        resultTemplate['users'][countyId][zoneId]           ||= {}
-
-        #init geoJSON Containers
-        geoJSON['byCounty'][countyId]         ||= {}
-        geoJSON['byCounty'][countyId]['data'] ||= []
-
-        zone['children'].map { | schoolId, school |
-          locationBySchool[schoolId]                  ||= {}
-          locationBySchool[schoolId]['countyId']        = countyId
-          locationBySchool[schoolId]['subCountyId']     = subCountyId
-          locationBySchool[schoolId]['zoneId']          = zoneId
-        }
+        resultTemplate['users'][countyName]                   ||= {}
+        resultTemplate['users'][countyName][zoneName]         ||= {}
       }
     } 
   }
@@ -228,8 +218,8 @@ dbs.each { |db|
   userDocs['rows'].map{ | user | 
     unless user['doc']['location'].nil?
       location = user['doc']['location']
-      county = location['County'] if !location['County'].nil?
-      zone = location['Zone'] if !location['Zone'].nil?
+      county = countyTranslate(location['County'].downcase) if !location['County'].nil?
+      zone = zoneTranslate(location['Zone'].downcase) if !location['Zone'].nil?
 
       #verify that the user has a zone and county associated
       if !county.nil? && !zone.nil?
@@ -267,12 +257,9 @@ dbs.each { |db|
       subTaskStart = Time.now()
 
       aggregateDocId = "report-aggregate-year#{year}month#{month}"
-      aggregateGeoDocId = "report-aggregate-geo-year#{year}month#{month}"
 
       #duplicate the resultTemplate to store this months data
       result = cloneDeep(resultTemplate)
-      geojson = {}
-      geojson['data'] = []
 
       # Check to see if the aggregate doc already exists
       begin
@@ -289,23 +276,6 @@ dbs.each { |db|
         result['_rev'] = aggDoc['_rev']
       end
 
-      # Check to see if the aggregate geo doc already exists for each county
-      
-      schoolList['locations'].map { | countyId, county |
-        begin
-          aggGeoDoc = couch.getRequest({ 
-            :doc => "#{aggregateGeoDocId}-#{countyId}", 
-            :parseJson => true 
-          })
-        rescue => e
-          # the doc doesn't already exist
-          aggGeoDoc = {}
-        end
-
-        if aggGeoDoc.has_key?('_rev')
-          geoJSON['byCounty'][countyId]['_rev'] = aggGeoDoc['_rev']
-        end
-      }
 
       monthKeys = ["year#{year}month#{month}"]
       tripsFromMonth = couch.postRequest({ 
@@ -357,6 +327,15 @@ dbs.each { |db|
       }
 
       #
+      # GeoJson
+      # 
+
+      geojsonByCounty = {}
+      
+      aggregateGeoDocId = "report-aggregate-geo-year#{year}month#{month}"
+
+
+      #
       # Get chunks of trips and work on the result
       #
 
@@ -387,124 +366,68 @@ dbs.each { |db|
         #
 
         for sum in tripRows
-          #puts sum['value']
-          next if sum['value']['school'].nil?
+
+          next if sum['value']['zone'].nil? 
           
-          schoolId      = sum['value']['school']
-
-          next if locationBySchool[schoolId].nil?  # skip result if school isn't in the list
-          
-          zoneId        = locationBySchool[schoolId]['zoneId']
-          subCountyId   = locationBySchool[schoolId]['subCountyId']
-          countyId      = locationBySchool[schoolId]['countyId']
-          username      = sum['value']['user'].downcase
-          
-          #skip these steps if either the county or zone are no longer in the primary list 
-          next if result['visits']['byCounty'][countyId].nil?
-          next if result['visits']['byCounty'][countyId]['zones'].nil?
-          next if result['visits']['byCounty'][countyId]['zones'][zoneId].nil?
-          next if result['visits']['byCounty'][countyId]['zones'][zoneId]['visits'].nil?
-
-          result['visits']['byCounty'][countyId]['zones'][zoneId]['trips'].push sum['id']
-
-          #puts "trip user: #{username} - in result #{result['users']['all'][username].nil?}"
-          #next if result['users']['all'][username].nil?
-          
-          #enseuer that the user exists in the db and in the result-set
-          if result['users']['all'][username].nil?
-            result['users']['all'][username]                            ||= {}
-            result['users']['all'][username]['data']                    ||= {}
-
-            result['users']['all'][username]['target']                  ||= {}      # container for target zone visits
-            result['users']['all'][username]['target']['visits']        ||= 0
-            result['users']['all'][username]['target']['compensation']  ||= 0
-
-            result['users']['all'][username]['other']                   ||= {}      # container for non-target zone visits
-
-            result['users']['all'][username]['total']                   ||= {}      # container for visit and compensation totals
-            result['users']['all'][username]['total']['visits']         ||= 0       # total visits across zones
-            result['users']['all'][username]['total']['compensation']   ||= 0       # total compensation across zones
-            result['users']['all'][username]['flagged']                 ||= false   # alert to visits outside of primary zone
-          end
-
-          if !result['users'][countyId][zoneId][username].nil?
-            result['users']['all'][username]['target']['visits']  += 1
-
-          else
-            result['users']['all'][username]['other'][countyId]                           ||= {}
-            result['users']['all'][username]['other'][countyId][zoneId]                   ||= {}
-            result['users']['all'][username]['other'][countyId][zoneId]['visits']         ||= 0
-            result['users']['all'][username]['other'][countyId][zoneId]['compensation']   ||= 0
-
-            result['users']['all'][username]['flagged']                                     = true
-            result['users']['all'][username]['other'][countyId][zoneId]['visits']          += 1
-          end
-
-          result['users']['all'][username]['total']['visits']                              += 1
-
-          result['visits']['national']['visits']                                           += 1
-          result['visits']['byCounty'][countyId]['visits']                                 += 1 
-          result['visits']['byCounty'][countyId]['zones'][zoneId]['visits']                += 1
+          zoneName   = zoneTranslate(sum['value']['zone'].downcase)
+          countyName = countyTranslate(sum['value']['county'].downcase)
+          username   = sum['value']['user'].downcase
 
 
-          # 
+
+          #
+          # GeoJson
+          #
+
           # prepare the geojson doc for the map
-          # 
-          schoolInList = false
-          if !schoolList['locations'][countyId].nil?
-            if !schoolList['locations'][countyId]['children'][subCountyId].nil?
-              if !schoolList['locations'][countyId]['children'][subCountyId]['children'][zoneId].nil?
-                if !schoolList['locations'][countyId]['children'][subCountyId]['children'][zoneId]['children'][schoolId].nil?
-                  schoolInList = true
-                else
-                  puts "School NOT in List - county: #{countyId}, subCounty: #{subCountyId}, zone: #{zoneId}, (school): #{schoolId}"
-                end
-              else
-                puts "School NOT in List - county: #{countyId}, subCounty: #{subCountyId}, (zone): #{zoneId}, school: #{schoolId}"
-              end
-            else
-              puts "School NOT in List - county: #{countyId}, (subCounty): #{subCountyId}, zone: #{zoneId}, school: #{schoolId}"
-            end
-          else
-            puts "School NOT in List - (county): #{countyId}, subCounty: #{subCountyId}, zone: #{zoneId}, school: #{schoolId}"
-          end
-
-          
           if !sum['value']['gpsData'].nil?
             point = sum['value']['gpsData']
 
             minuteDuration = (sum['value']['maxTime'].to_i - sum['value']['minTime'].to_i ) / 1000 / 60 / 3600 #TODO: check back on the validity of this
             
             if !groupTimeZone.nil?
-              startDate = Time.at(sum['value']['minTime'].to_i / 1000).getlocal(groupTimeZone).strftime("%Y %b %d %H:%M")
+              startDate = Time.at(sum['value']['minTime'].to_i / 1000).strftime("%Y %b %d %H:%M")
             else 
               startDate = Time.at(sum['value']['minTime'].to_i / 1000).strftime("%Y %b %d %H:%M")
             end
 
-            if !schoolInList
-              point['properties'] = [
-                { 'label' => 'Date',            'value' => startDate },
-                { 'label' => 'Subject',         'value' => subjectLegend[sum['value']['subject']] },
-                { 'label' => 'TAC tutor',       'value' => titleize(sum['value']['user'].downcase) },
-                { 'label' => 'Lesson Week',     'value' => sum['value']['week'] },
-                { 'label' => 'Lesson Day',      'value' => sum['value']['day'] }
-              ]
+            point['properties'] = [
+              { 'label' => 'Date',            'value' => startDate },
+              { 'label' => 'Subject',         'value' => subjectLegend[sum['value']['subject']] },
+              { 'label' => 'Lesson duration', 'value' => "#{minuteDuration} min." },
+              { 'label' => 'Zone',            'value' => sum['value']['zone'] },
+              { 'label' => 'TAC tutor',       'value' => sum['value']['user'] },
+              { 'label' => 'Lesson Week',     'value' => sum['value']['week'] },
+              { 'label' => 'Lesson Day',      'value' => sum['value']['day'] }
+            ]
 
-            else 
-              point['properties'] = [
-                { 'label' => 'Date',            'value' => startDate },
-                { 'label' => 'Subject',         'value' => subjectLegend[sum['value']['subject']] },
-                { 'label' => 'Zone',            'value' => titleize(schoolList['locations'][countyId]['children'][subCountyId]['children'][zoneId]['label'].downcase) },
-                { 'label' => 'School',          'value' => titleize(schoolList['locations'][countyId]['children'][subCountyId]['children'][zoneId]['children'][schoolId]['label'].downcase) },
-                { 'label' => 'TAC tutor',       'value' => titleize(sum['value']['user'].downcase) },
-                { 'label' => 'Lesson Week',     'value' => sum['value']['week'] },
-                { 'label' => 'Lesson Day',      'value' => sum['value']['day'] }
-              ]
-            end
-
-            geoJSON['byCounty'][countyId]['data'].push point
+            geojsonByCounty[countyName]         ||= {}
+            geojsonByCounty[countyName]['data'] ||= []
+            geojsonByCounty[countyName]['data'].push point
           end
 
+
+
+          result['visits']['byCounty'][countyName]['zones'][zoneName]['trips'].push sum['id']
+
+          if !result['users'][countyName][zoneName][username].nil?
+            result['users']['all'][username]['target']['visits']  += 1
+
+          else
+            result['users']['all'][username]['other'][countyName]                             ||= {}
+            result['users']['all'][username]['other'][countyName][zoneName]                   ||= {}
+            result['users']['all'][username]['other'][countyName][zoneName]['visits']         ||= 0
+            result['users']['all'][username]['other'][countyName][zoneName]['compensation']   ||= 0
+
+            result['users']['all'][username]['flagged']                                 = true
+            result['users']['all'][username]['other'][countyName][zoneName]['visits']   += 1
+          end
+
+          result['users']['all'][username]['total']['visits']   += 1
+
+          result['visits']['national']['visits']                                  += 1
+          result['visits']['byCounty'][countyName]['visits']                      += 1 
+          result['visits']['byCounty'][countyName]['zones'][zoneName]['visits']   += 1
 
           #
           # process fluency data
@@ -538,23 +461,23 @@ dbs.each { |db|
             result['visits']['national']['fluency'][subject]['size']          += benchmarked
             result['visits']['national']['fluency'][subject]['metBenchmark']  += met
 
-            result['visits']['byCounty'][countyId]['fluency'][subject]                  ||= {}
-            result['visits']['byCounty'][countyId]['fluency'][subject]['sum']           ||= 0
-            result['visits']['byCounty'][countyId]['fluency'][subject]['size']          ||= 0
-            result['visits']['byCounty'][countyId]['fluency'][subject]['metBenchmark']  ||= 0
+            result['visits']['byCounty'][countyName]['fluency'][subject]                  ||= {}
+            result['visits']['byCounty'][countyName]['fluency'][subject]['sum']           ||= 0
+            result['visits']['byCounty'][countyName]['fluency'][subject]['size']          ||= 0
+            result['visits']['byCounty'][countyName]['fluency'][subject]['metBenchmark']  ||= 0
 
-            result['visits']['byCounty'][countyId]['fluency'][subject]['sum']           += total
-            result['visits']['byCounty'][countyId]['fluency'][subject]['size']          += benchmarked
-            result['visits']['byCounty'][countyId]['fluency'][subject]['metBenchmark']  += met
+            result['visits']['byCounty'][countyName]['fluency'][subject]['sum']           += total
+            result['visits']['byCounty'][countyName]['fluency'][subject]['size']          += benchmarked
+            result['visits']['byCounty'][countyName]['fluency'][subject]['metBenchmark']  += met
 
-            result['visits']['byCounty'][countyId]['zones'][zoneId]['fluency'][subject]                  ||= {}
-            result['visits']['byCounty'][countyId]['zones'][zoneId]['fluency'][subject]['sum']           ||= 0
-            result['visits']['byCounty'][countyId]['zones'][zoneId]['fluency'][subject]['size']          ||= 0
-            result['visits']['byCounty'][countyId]['zones'][zoneId]['fluency'][subject]['metBenchmark']  ||= 0
+            result['visits']['byCounty'][countyName]['zones'][zoneName]['fluency'][subject]                  ||= {}
+            result['visits']['byCounty'][countyName]['zones'][zoneName]['fluency'][subject]['sum']           ||= 0
+            result['visits']['byCounty'][countyName]['zones'][zoneName]['fluency'][subject]['size']          ||= 0
+            result['visits']['byCounty'][countyName]['zones'][zoneName]['fluency'][subject]['metBenchmark']  ||= 0
 
-            result['visits']['byCounty'][countyId]['zones'][zoneId]['fluency'][subject]['sum']           += total
-            result['visits']['byCounty'][countyId]['zones'][zoneId]['fluency'][subject]['size']          += benchmarked
-            result['visits']['byCounty'][countyId]['zones'][zoneId]['fluency'][subject]['metBenchmark']  += met
+            result['visits']['byCounty'][countyName]['zones'][zoneName]['fluency'][subject]['sum']           += total
+            result['visits']['byCounty'][countyName]['zones'][zoneName]['fluency'][subject]['size']          += benchmarked
+            result['visits']['byCounty'][countyName]['zones'][zoneName]['fluency'][subject]['metBenchmark']  += met
 
           end
           
@@ -566,47 +489,32 @@ dbs.each { |db|
       puts "Calculating Compensation...\n"
       result['users']['all'].map{ | userName, user |
 
-        if result['users']['all'][userName]['data']['location'].nil?
-          puts "Error: Cannot find location information for username: #{userName}"
-        end
-
-        next if result['users']['all'][userName]['data']['location'].nil?
-
-
         location = result['users']['all'][userName]['data']['location']
 
-        countyId  = location['County'] if !location['County'].nil?
-        zoneId    = location['Zone'] if !location['Zone'].nil?
-
-
-        #skip these steps if either the county or zone are no longer in the primary list 
-        next if result['visits']['byCounty'][countyId].nil?
-        next if result['visits']['byCounty'][countyId]['zones'].nil?
-        next if result['visits']['byCounty'][countyId]['compensation'].nil?
-        next if result['visits']['byCounty'][countyId]['zones'][zoneId].nil?
-        next if result['visits']['byCounty'][countyId]['zones'][zoneId]['compensation'].nil?
+        countyName  = countyTranslate(location['County'].downcase) if !location['County'].nil?
+        zoneName    = zoneTranslate(location['Zone'].downcase) if !location['Zone'].nil?
 
 
         #ensure that the user has a county and zone assigned that exist
-        if !countyId.nil? && !zoneId.nil? && (result['users']['all'][userName]['total']['visits'] > 0)
+        if !countyName.nil? && !zoneName.nil? && (result['users']['all'][userName]['total']['visits'] > 0)
 
 
           # handle compensation for visits outside the assigned zone 
           if user['flagged'] == true
-            user['other'].map{ | altCountyId, altCounty |
-              altCounty.map{ | altZoneId, altZone |
+            user['other'].map{ | altCountyName, altCounty |
+              altCounty.map{ | altZoneName, altZone |
 
-                result['users'][altCountyId][altZoneId][userName] = true
+                result['users'][altCountyName][altZoneName][userName] = true
                 
-                completePct = (altZone['visits'] + 0.0) / result['visits']['byCounty'][altCountyId]['zones'][altZoneId]['quota']
+                completePct = (altZone['visits'] + 0.0) / result['visits']['byCounty'][altCountyName]['zones'][altZoneName]['quota']
                 compensation = (((completePct > 1) ? 1 : completePct) * 6000).round(2)
 
                 altZone['compensation']                                   += compensation
                 result['users']['all'][userName]['total']['compensation'] += compensation
 
-                result['visits']['national']['compensation']                                      += compensation
-                result['visits']['byCounty'][altCountyId]['compensation']                         += compensation
-                result['visits']['byCounty'][altCountyId]['zones'][altZoneName]['compensation']   += compensation
+                result['visits']['national']['compensation']                                  += compensation
+                result['visits']['byCounty'][altCountyName]['compensation']                      += compensation
+                result['visits']['byCounty'][altCountyName]['zones'][altZoneName]['compensation']   += compensation
               }
             }
 
@@ -616,22 +524,22 @@ dbs.each { |db|
               result['users']['all'][userName]['target']['compensation'] += 300;
               result['users']['all'][userName]['total']['compensation']  += 300;
 
-              result['visits']['national']['compensation']                              += 300
-              result['visits']['byCounty'][countyId]['compensation']                    += 300
-              result['visits']['byCounty'][countyId]['zones'][zoneId]['compensation']   += 300
+              result['visits']['national']['compensation']                                  += 300
+              result['visits']['byCounty'][countyName]['compensation']                      += 300
+              result['visits']['byCounty'][countyName]['zones'][zoneName]['compensation']   += 300
             end 
 
           else 
-            completePct   = (user['target']['visits'] + 0.0) / result['visits']['byCounty'][countyId]['zones'][zoneId]['quota']
+            completePct   = (user['target']['visits'] + 0.0) / result['visits']['byCounty'][countyName]['zones'][zoneName]['quota']
             compensation  = (((completePct > 1) ? 1 : completePct) * 6000 + 300).round(2)
             
             result['users']['all'][userName]['target']['compensation'] += compensation;
             result['users']['all'][userName]['total']['compensation']  += compensation;
 
 
-            result['visits']['national']['compensation']                              += compensation
-            result['visits']['byCounty'][countyId]['compensation']                    += compensation
-            result['visits']['byCounty'][countyId]['zones'][zoneId]['compensation']   += compensation
+            result['visits']['national']['compensation']                                  += compensation
+            result['visits']['byCounty'][countyName]['compensation']                      += compensation
+            result['visits']['byCounty'][countyName]['zones'][zoneName]['compensation']   += compensation
 
           end
 
@@ -639,22 +547,50 @@ dbs.each { |db|
       }
 
       #
-      # Saving the generated result back to the server
+      # Saving the generated results back to the server
       couch.putRequest({ 
-        :doc => "#{aggregateDocId}", 
+        :doc => aggregateDocId, 
         :data => result 
       })
 
 
-      geoJSON['byCounty'].map { | countyId, countyData |
-        
-        #Saving the generated Geo result back to the server
+      #
+      # Saving the generated Geo Results back to the server
+      #
+      puts "Saving geojson "
+
+
+      geojsonByCounty.each { | county, doc | 
+        print "#{county} "
+
+        # convert funky chars to base64
+        safeCounty = Base64.urlsafe_encode64 county
+
+        docId = "geojson-year#{year}month#{month}county#{safeCounty}"
+
+        # does the doc already exist?
+        begin
+          oldDoc = couch.getRequest({ 
+            :doc => docId, 
+            :parseJson => true 
+          })
+        rescue => e
+          # no
+          oldDoc = {}
+        end
+
+        # use old _rev to update
+        doc['_rev'] = oldDoc['_rev'] if oldDoc['_rev']
+
+        # save
         couch.putRequest({ 
-          :doc => "#{aggregateGeoDocId}-#{countyId}", 
-          :data => countyData 
+          :doc  => docId, 
+          :data => doc
         })
       
-      }
+      } # end of geojsonByCounty.each 
+
+      print "\n"
 
       puts "      Month Completed - (#{time_diff(Time.now(), subTaskStart)})"
 
@@ -680,6 +616,5 @@ dbs.each { |db|
 }
 
 puts "\nCron Job Completed - (#{time_diff(Time.now(), cronStart)})"
-
 
 

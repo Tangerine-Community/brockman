@@ -1,7 +1,3 @@
-
-
-require_relative '../helpers/LocationList.rb'
-
 class Brockman < Sinatra::Base
 
   get '/workflow/:group/:workflowId/:year/:month' do | groupPath, workflowId, year, month |
@@ -9,7 +5,7 @@ class Brockman < Sinatra::Base
     $logger.info "CSV request - #{groupPath} #{workflowId} #{year} #{month}"
 
     couch = Couch.new({
-      :host      => $settings[:dbHost],
+      :host      => $settings[:host],
       :login     => $settings[:login],
       :designDoc => $settings[:designDoc],
       :db        => groupPath,
@@ -36,12 +32,6 @@ class Brockman < Sinatra::Base
     groupSettings = couch.getRequest({ :doc => 'settings', :parseJson => true })
     groupTimeZone = groupSettings['timeZone']    
 
-    #
-    # get locations
-    #
-    locationList = LocationList.new({
-      :couch => couch
-    })
 
     #
     # get workflow
@@ -108,8 +98,7 @@ class Brockman < Sinatra::Base
     csv = Csv.new({
       :couch => couch,
       :name => workflowName,
-      :path => groupPath,
-      :locationList => locationList
+      :path => groupPath
     })
 
     file = csv.doWorkflow({

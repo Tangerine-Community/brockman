@@ -1,8 +1,7 @@
 #encoding: utf-8
 
 require 'uri'
-require 'base64'
-require 'date'
+
 require_relative '../helpers/Couch'
 require_relative '../utilities/countyTranslate'
 require_relative '../utilities/zoneTranslate'
@@ -19,21 +18,6 @@ class Brockman < Sinatra::Base
   get '/reimbursement/:group/:workflowIds/:year/:month/:county/:zone.:format?' do | group, workflowIds, year, month, county, zone, format |
   
     format = "html" unless format == "json"
-
-    safeCounty = county
-    safeZone = zone
-    
-    begin
-     county = Base64.urlsafe_decode64 params[:county].downcase
-    rescue
-     county = params[:county].downcase
-    end
-    
-    begin
-     zone = Base64.urlsafe_decode64 params[:zone].downcase
-    rescue
-     zone = params[:zone].downcase
-    end
 
     requestId = SecureRandom.base64
 
@@ -58,7 +42,7 @@ class Brockman < Sinatra::Base
     # Get quota information
     # 
     begin
-      result = couch.getRequest({ :doc => "report-aggregate-year#{year}month#{month}", :parseJson => true })
+      result = couch.getRequest({ :doc => "aggregate-year#{year}month#{month}", :parseJson => true })
     rescue => e
       # the doc doesn't already exist
       puts e
@@ -66,10 +50,10 @@ class Brockman < Sinatra::Base
     end
 
     currentCounty         = nil
-    currentCountyName     = county
+    currentCountyName     = params[:county].downcase
 
     currentZone           = nil
-    currentZoneName       = zone
+    currentZoneName       = params[:zone].downcase
    
     #ensure that the county in the URL is valid - if not, select the first
     if result['visits']['byCounty'][currentCountyName].nil?

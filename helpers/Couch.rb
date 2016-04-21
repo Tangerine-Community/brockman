@@ -169,7 +169,7 @@ class Couch
     options[:designDoc] = @designDoc unless options[:designDoc]
 
     raise ArgumentError.new( "getUrl requires protocol(#{@protocol}) and host(#{@host})" ) if @host.nil? || @protocol.nil?
-    host = "#{@protocol}#{loginString}#{@host}"
+    host = "#{@protocol}#{loginString}#{@host}/"
 
 
     # make url
@@ -187,7 +187,6 @@ class Couch
     else 
       url = host
     end
-    #puts url
     return url
 
   end # of getUrl
