@@ -86,6 +86,9 @@ class TayariReports
           templates['result']['visits']['dicece']['byCounty'][countyId]['zones'][zoneId]['visits']      ||= 0
           templates['result']['visits']['dicece']['byCounty'][countyId]['zones'][zoneId]['quota']       ||= 0
 
+          templates['result']['visits']['cha']['byCounty'][countyId]['quota']                      += zone['healthQuota'].to_i
+          templates['result']['visits']['dicece']['byCounty'][countyId]['quota']                   += zone['educationQuota'].to_i
+
           templates['result']['visits']['cha']['byCounty'][countyId]['zones'][zoneId]['quota']     += zone['healthQuota'].to_i
           templates['result']['visits']['dicece']['byCounty'][countyId]['zones'][zoneId]['quota']  += zone['educationQuota'].to_i
 
@@ -148,7 +151,6 @@ class TayariReports
           templates['users']['all'][username]['data']                      = user['doc']
           templates['users']['all'][username]['role']                      = role
 
-          end
         end
       end
     }
@@ -167,6 +169,8 @@ class TayariReports
 
     workflowId = trip['value']['workflowId'] || trip['id']
     username   = trip['value']['user']       || ""
+
+    puts trip['id']
 
     # handle case of irrelevant workflow 
     return err(true, "Incomplete or Invalid Workflow: #{workflowId}") if not workflows[workflowId]
@@ -203,7 +207,7 @@ class TayariReports
       return err(true, "CHA: Missing Zone")   if monthData['result']['visits']['cha']['byCounty'][countyId]['zones'][zoneId].nil?
       return err(true, "CHA: Missing Visits") if monthData['result']['visits']['cha']['byCounty'][countyId]['zones'][zoneId]['visits'].nil?
 
-      monthData['result']['visits']['cha']['byCounty'][countyId]['zones'][zoneId]['trips'].push trip['id']
+      monthData['result']['visits']['cha']['byCounty'][countyId]['zones'][zoneId]['trips'].push "#{trip['id']}"
       
       monthData['result']['visits']['cha']['national']['visits']                                 += 1
       monthData['result']['visits']['cha']['byCounty'][countyId]['visits']                       += 1
@@ -241,7 +245,7 @@ class TayariReports
       return err(true, "DICECE: Missing Zone")   if monthData['result']['visits']['dicece']['byCounty'][countyId]['zones'][zoneId].nil?
       return err(true, "DICECE: Missing Visits") if monthData['result']['visits']['dicece']['byCounty'][countyId]['zones'][zoneId]['visits'].nil?
 
-      monthData['result']['visits']['dicece']['byCounty'][countyId]['zones'][zoneId]['trips'].push trip['id']
+      monthData['result']['visits']['dicece']['byCounty'][countyId]['zones'][zoneId]['trips'].push "#{trip['id']}"
       
       monthData['result']['visits']['dicece']['national']['visits']                                 += 1
       monthData['result']['visits']['dicece']['byCounty'][countyId]['visits']                       += 1
