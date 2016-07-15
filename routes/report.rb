@@ -120,11 +120,10 @@ class Brockman < Sinatra::Base
         q.await(buildReportCharts);
       }
 
-
-
       var datasetScores = Array()
-      var datasetObservationsPublic = Array();
-      var datasetObservationsAPBET = Array();
+      var datasetObservationsEdCounty = Array();
+      var datasetObservationsEdZone = Array();
+
       var dates = Array();
       var months = {
         1:'January',
@@ -162,10 +161,12 @@ class Brockman < Sinatra::Base
         // loop over data and build d3 friendly dataset 
         dates.forEach(function(el){
           var tmpset = Array();
-    console.log(el);
-          for(var county in el.data.visits.byCounty)
+
+          console.log(el);
+          for(var county in el.data.visits.dicece.byCounty)
           {
-            var tmpCounty = titleize(safeRead(el.data.visits.byCounty[county], 'name'));
+
+            var tmpCounty = titleize(safeRead(el.data.visits.dicece.byCounty[county], 'name'));
             var tmp = {
               County   : tmpCounty,
               MonthInt : el.month,
@@ -174,54 +175,92 @@ class Brockman < Sinatra::Base
             };
             
             var tmpVisit = {};
-            var countyVisits = safeRead(el.data.visits.byCounty[county], 'visits');
-            var countyQuota = safeRead(el.data.visits.byCounty[county],'quota');
+            var countyVisits = safeRead(el.data.visits.dicece.byCounty[county], 'visits');
+            var countyQuota = safeRead(el.data.visits.dicece.byCounty[county],'quota');
+
             if (countyVisits == 0 || countyQuota == 0){
               tmpVisit['Visit Attainment'] = 0;
             } else {
               tmpVisit['Visit Attainment'] = countyVisits / countyQuota * 100;
             }
 
-            if(tmpCounty.search(/apbet/i) == -1){
-              datasetObservationsPublic.push($.extend({}, tmp, tmpVisit));
-            } else {
-              datasetObservationsAPBET.push($.extend({}, tmp, tmpVisit));
+            datasetObservationsEdCounty.push($.extend({}, tmp, tmpVisit));          
+            
+            //zone data
+            var countyId  = '#{countyId}';
+            for(var zone in el.data.visits.dicece.byCounty[county].zones)
+            {
+              var tmpZone = titleize(safeRead(el.data.visits.dicece.byCounty[county].zones[zone], 'name'));
+              var tmpZoneData = {
+                Zone   : tmpZone,
+                MonthInt : el.month,
+                Year     : el.year,
+                Month    : months[el.month]
+              };
+
+              var tmpZoneVisit = {};
+              var zoneVisits = safeRead(el.data.visits.dicece.byCounty[county].zones[zone], 'visits');
+              var zoneQuota = safeRead(el.data.visits.dicece.byCounty[county].zones[zone],'quota');
+
+              if (zoneVisits == 0 || zoneQuota == 0){
+              tmpZoneVisit['Visit Attainment'] = 0;
+              } else {
+                tmpZoneVisit['Visit Attainment'] = zoneVisits / zoneQuota * 100;
+              }
+              
+              datasetObservationsEdZone.push($.extend({}, tmpZoneData, tmpZoneVisit));
             }
 
-            if(isNaN(tmpVisit['Visit Attainment'])) delete tmpVisit['Visit Attainment'];
-            
-            tmp['English Score - Class 1'] = safeRead(el.data.visits.byCounty[county].fluency.class[1],'english_word','sum')/safeRead(el.data.visits.byCounty[county].fluency.class[1],'english_word','size');
-            tmp['English Score - Class 2'] = safeRead(el.data.visits.byCounty[county].fluency.class[2],'english_word','sum')/safeRead(el.data.visits.byCounty[county].fluency.class[2],'english_word','size');
-            if(isNaN(tmp['English Score - Class 1'])) { delete tmp['English Score - Class 1'] };
-            if(isNaN(tmp['English Score - Class 2'])) { delete tmp['English Score - Class 2'] };
-            
-            tmp['Kiswahili Score - Class 1'] = safeRead(el.data.visits.byCounty[county].fluency.class[1],'word','sum')/safeRead(el.data.visits.byCounty[county].fluency.class[1],'word','size');
-            tmp['Kiswahili Score - Class 2'] = safeRead(el.data.visits.byCounty[county].fluency.class[2],'word','sum')/safeRead(el.data.visits.byCounty[county].fluency.class[2],'word','size');
-            if(isNaN(tmp['Kiswahili Score - Class 1'])) { delete tmp['Kiswahili Score - Class 1'] };
-            if(isNaN(tmp['Kiswahili Score - Class 2'])) { delete tmp['Kiswahili Score - Class 2'] };
-
-            //tmp['Math Score'] = safeRead(el.data.visits.byCounty[county].fluency,'operation','sum')/safeRead(el.data.visits.byCounty[county].fluency,'operation','size');
-            //if(isNaN(tmp['Math Score'])) { delete tmp['Math Score'] };
-
-            
-                          
-            datasetScores.push(tmp);
           }
         })
         
         // Build the charts. 
-        //addChart(datasetScores, 'English Score - Class 1', 'English Score - Class 1', 'Correct Items Per Minute');
-        //addChart(datasetScores, 'English Score - Class 2', 'English Score - Class 2', 'Correct Items Per Minute');
-        //addChart(datasetScores, 'Kiswahili Score - Class 1', 'Kiswahili Score - Class 1', 'Correct Items Per Minute');
-        //addChart(datasetScores, 'Kiswahili Score - Class 2', 'Kiswahili Score - Class 2', 'Correct Items Per Minute');
-        //addChart('Math Score', 'Maths Score', 'Correct Items Per Minute');
-        //addChart(datasetObservationsPublic, 'Visit Attainment', 'Classroom Observations (Public)','Percentage');
-        //addChart(datasetObservationsAPBET, 'Visit Attainment', 'Classroom Observations (APBET)','Percentage');
+        addChart(datasetObservationsEdCounty, 'Visit Attainment', 'Classroom Observations (County)','Percentage');
+        addZoneChart(datasetObservationsEdZone, 'Visit Attainment', 'Classroom Observations (Zone)','Percentage');
         $('#charts-loading').remove()
 
       }     
 
-    
+      function addZoneChart(dataset, variable, title, xaxis)
+      {
+        // create the element that the chart lives in
+        var domid = (new Date()).getTime();
+        $('#charts').append('<div class=\"chart\"><h2 style=\"text-align:center;\">'+title+'</h2><div id=\"chartContainer'+domid+'\" /></div>');
+
+        // start building chart object to pass to render function
+        chartObject = new Object();
+        chartObject.container = '#chartContainer'+domid;
+        chartObject.height = 650;
+        chartObject.width = 450;
+        chartObject.data =  dataset;
+        
+        chartObject.plot = function(chart){
+
+          // setup x, y and series
+          var y = chart.addCategoryAxis('y', ['Zone','Month']);
+          y.addOrderRule('Zone');
+          y.addGroupOrderRule('MonthInt');
+
+          var x = chart.addMeasureAxis('x', variable);
+
+          var series = chart.addSeries(['Month'], dimple.plot.bar);
+          series.addOrderRule('MonthInt');
+          series.clusterBarGap = 0;
+          
+          // add the legend
+          //chart.addLegend(chartObject.width-100, chartObject.height/2-25, 100,  150, 'left');
+          chart.addLegend(60, 10, 400, 20, 'right');
+        };
+        
+        // titles for x and y axis
+        chartObject.yAxis = 'Zone';
+        chartObject.xAxis = xaxis;
+        
+        // show hover tooltips
+        chartObject.showHover = true;
+        buildChart(chartObject);
+      }
+
       function addChart(dataset, variable, title, xaxis)
       {
         // create the element that the chart lives in
