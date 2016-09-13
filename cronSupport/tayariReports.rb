@@ -17,7 +17,7 @@ class TayariReports
 
     @locationList = nil
     @tripsSkipped = 0
-
+    
   end # of initialize
 
   # Process locations
@@ -174,12 +174,13 @@ class TayariReports
 
     # handle case of irrelevant workflow 
     return err(true, "Incomplete or Invalid Workflow: #{workflowId}") if not workflows[workflowId]
-    return err(true, "Workflow does not get pre-processed: #{workflowId}") if not workflows[workflowId]['reporting']['preProcess']
+    #return err(true, "Workflow does not get pre-processed: #{workflowId}") if not workflows[workflowId]['reporting']['preProcess']
 
     # validate user and role-workflow assocaition
     return err(true, "User does not exist: #{username}") if not templates['users']['all'][username]
     userRole = templates['users']['all'][username]['role']
-    return err(true, "User role does not match with workflow: #{username} | #{templates['users']['all'][username]['role']} - targets #{workflows[workflowId]['reporting']['targetRoles']}") if not workflows[workflowId]['reporting']['targetRoles'].include? userRole
+
+    #return err(true, "User role does not match with workflow: #{username} | #{templates['users']['all'][username]['role']} - targets #{workflows[workflowId]['reporting']['targetRoles']}") if not workflows[workflowId]['reporting']['targetRoles'].include? userRole
 
     # validate against the workflow constraints
     validated = validateTrip(trip, workflows[workflowId])
@@ -200,8 +201,8 @@ class TayariReports
     #
     # Handle Role-specific calculations
     #
-    if userRole == "cha"
-
+    if userRole == "cha" or userRole == "chews"
+      puts "** processing CHA/CHEWS Trip"
       return err(true, "CHA: Missing County") if monthData['result']['visits']['cha']['byCounty'][countyId].nil?
       return err(true, "CHA: Missing Zones")  if monthData['result']['visits']['cha']['byCounty'][countyId]['zones'].nil?
       return err(true, "CHA: Missing Zone")   if monthData['result']['visits']['cha']['byCounty'][countyId]['zones'][zoneId].nil?
@@ -216,6 +217,7 @@ class TayariReports
       #
       # Process geoJSON data for mapping
       #
+
       if !trip['value']['gpsData'].nil?
         point = trip['value']['gpsData']
 
@@ -228,6 +230,10 @@ class TayariReports
         point['role'] = userRole
         point['properties'] = [
           { 'label' => 'Date',            'value' => startDate.strftime("%d-%m-%Y %H:%M") },
+          #{ 'label' => 'Activity',        'value' => ''},
+          { 'label' => 'Class',           'value' => trip['value']['class'] },
+          { 'label' => 'Lesson Week',     'value' => trip['value']['week'] },
+          { 'label' => 'Lesson Day',      'value' => trip['value']['day'] },
           { 'label' => 'County',          'value' => titleize(@locationList['locations'][countyId]['label'].downcase) },
           { 'label' => 'Zone',            'value' => titleize(@locationList['locations'][countyId]['children'][subCountyId]['children'][zoneId]['label'].downcase) },
           { 'label' => 'School',          'value' => titleize(@locationList['locations'][countyId]['children'][subCountyId]['children'][zoneId]['children'][schoolId]['label'].downcase) },
@@ -266,6 +272,10 @@ class TayariReports
         point['role'] = userRole
         point['properties'] = [
           { 'label' => 'Date',            'value' => startDate.strftime("%d-%m-%Y %H:%M") },
+          #{ 'label' => 'Activity',        'value' => ''},
+          { 'label' => 'Class',           'value' => trip['value']['class'] },
+          { 'label' => 'Lesson Week',     'value' => trip['value']['week'] },
+          { 'label' => 'Lesson Day',      'value' => trip['value']['day'] },
           { 'label' => 'County',          'value' => titleize(@locationList['locations'][countyId]['label'].downcase) },
           { 'label' => 'Zone',            'value' => titleize(@locationList['locations'][countyId]['children'][subCountyId]['children'][zoneId]['label'].downcase) },
           { 'label' => 'School',          'value' => titleize(@locationList['locations'][countyId]['children'][subCountyId]['children'][zoneId]['children'][schoolId]['label'].downcase) },
