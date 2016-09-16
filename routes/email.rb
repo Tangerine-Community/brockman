@@ -8,12 +8,12 @@ require_relative '../utilities/percentage'
 
 class Brockman < Sinatra::Base
   
-  get '/email/:email/:group/:workflowIds/:year/:month/:county.?:format?' do | email, group, workflowIds, year, month, county, format |
+  get '/email/:email/:group/:year/:month/:county.?:format?' do | email, group, year, month, county, format |
 
     format = "html" unless format == "json"
-
-    countyId = county
-
+    
+    countyId = county 
+    
     requestId = SecureRandom.base64
 
     TRIP_KEY_CHUNK_SIZE = 500
@@ -25,17 +25,15 @@ class Brockman < Sinatra::Base
       :db        => group
     })
 
-    subjectLegend = { "english_word" => "English", "word" => "Kiswahili", "operation" => "Maths" }
-
     #
     # get Group settings
     #
     groupSettings = couch.getRequest({ :doc => 'settings', :parseJson => true })
-    groupTimeZone = groupSettings['timeZone']
+    groupTimeZone = groupSettings['timeZone'] 
 
-      #
+    #
     # Get quota information
-      #
+    # 
     begin
       reportSettings = couch.getRequest({ :doc => "report-aggregate-settings", :parseJson => true })
       result = couch.getRequest({ :doc => "report-aggregate-year#{year}month#{month}", :parseJson => true })
@@ -43,192 +41,171 @@ class Brockman < Sinatra::Base
       # the doc doesn't already exist
       puts e
       return invalidReport()
-      end
+    end
 
     currentCountyId       = nil
     currentCounty         = nil
     currentCountyName     = nil
-
+   
     #ensure that the county in the URL is valid - if not, select the first
-    if result['visits']['byCounty'][countyId].nil?
-      result['visits']['byCounty'].find { |countyId, county|
+    if result['visits']['dicece']['byCounty'][countyId].nil?
+      result['visits']['dicece']['byCounty'].find { |countyId, county|
         currentCountyId   = countyId
         currentCounty     = county
         currentCountyName = county['name']
         true
-    }
-    else
+      }
+    else 
       currentCountyId   = countyId
-      currentCounty     = result['visits']['byCounty'][countyId]
+      currentCounty     = result['visits']['dicece']['byCounty'][countyId]
       currentCountyName = currentCounty['name']
     end
 
     legendHtml = "
       <small>
-        <ol>
-        <li id='footer-note-1'><b>Numbers of classroom visits are</b> defined as TUSOME classroom observations that include all forms and all 3 pupils assessments, with at least 20 minutes duration, and took place between 7AM and 3.10PM of any calendar day during the selected month.</li>
+
+      <ol>
+        <li id='footer-note-1'><b>Numbers of classroom visits are</b> defined as TAYARI classroom observations that include all forms and all 3 pupils assessments, with at least 20 minutes duration, and took place between 7AM and 3.10PM of any calendar day during the selected month.</li>
         <li id='footer-note-2'><b>Targeted number of classroom visits</b> is equivalent to the number of class 1 teachers in each zone.</li>
-          <li id='footer-note-3'><b>Correct per minute</b> is the calculated average out of all individual assessment results from all qualifying classroom visits in the selected month to date, divided by the total number of assessments conducted.</li>
-          <li id='footer-note-4'><b>Percentage at KNEC benchmark</b> is the percentage of those students that have met the KNEC benchmark for either Kiswahili or English, and for either class 1 or class 2, out of all of the students assessed for those subjects.</li>
-        </ol>
+      </ol>
       </small>
     "
 
     #retrieve a county list for the select and sort it
     countyList = []
-    result['visits']['byCounty'].map { |countyName, county| countyList.push countyName }
+    result['visits']['dicece']['byCounty'].map { |countyName, county| countyList.push countyName }
     countyList.sort!
 
 
     row = 0
-    countyTableHtml = "
+    edCountyTableHtml = "
       <table>
         <thead>
           <tr>
             <th>County</th>
             <th class='custSort'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
             <small>( Percentage of Target Visits)</small></th>
-            #{reportSettings['fluency']['subjects'].map{ | subject |
-              "<th class='custSort'>#{subjectLegend[subject]}<br>
-                Correct per minute<a href='#footer-note-3'><sup>[3]</sup></a><br>
-                #{"<small>( Percentage at KNEC benchmark<a href='#footer-note-4'><sup>[4]</sup></a>)</small>" if subject != "operation"}
-              </th>"
-            }.join}
           </tr>
         </thead>
         <tbody>
-          #{ result['visits']['byCounty'].map{ | countyId, county |
+          #{ result['visits']['dicece']['byCounty'].map{ | countyId, county |
 
             countyName      = county['name']
             visits          = county['visits']
             quota           = county['quota']
-            sampleTotal = 0
 
-          "
+            "
               <tr>
                 <td>#{titleize(countyName)}</td>
                 <td>#{visits} ( #{percentage( quota, visits )}% )</td>
-                #{reportSettings['fluency']['subjects'].map{ | subject |
-                  #ensure that there, at minimum, a fluency category for the county
-                  sample = county['fluency'][subject]
-                if sample.nil?
-                  average = "no data"
-                else
-                  
-                  if sample && sample['size'] != 0 && sample['sum'] != 0
-                    sampleTotal += sample['size']
-                    average = ( sample['sum'] / sample['size'] ).round
-                  else
-                    average = '0'
-                  end
-
-                    if subject != "operation"
-                      benchmark = sample['metBenchmark']
-                      percentage = "( #{percentage( sample['size'], benchmark )}% )"
-                  end
-
-                end
-                  "<td>#{average} <span>#{percentage}</span></td>"
-              }.join}
-
-            </tr>
-          "}.join }
+              </tr>
+            "}.join }
             <tr>
               <td>All</td>
-              <td>#{result['visits']['national']['visits']} ( #{percentage( result['visits']['national']['quota'], result['visits']['national']['visits'] )}% )</td>
-              #{reportSettings['fluency']['subjects'].map{ | subject |
-                sample = result['visits']['national']['fluency'][subject]
-                if sample.nil?
-                  average = "no data"
-                else
-                  if sample && sample['size'] != 0 && sample['sum'] != 0
-                    average = ( sample['sum'] / sample['size'] ).round
-                  else
-                    average = '0'
-                  end
-
-                  if subject != "operation"
-                    benchmark = sample['metBenchmark']
-                    percentage = "( #{percentage( sample['size'], benchmark )}% )"
-                  end
-                end
-                "<td>#{average} <span>#{percentage}</span></td>"
-              }.join}
+              <td>#{result['visits']['dicece']['national']['visits']} ( #{percentage( result['visits']['dicece']['national']['quota'], result['visits']['dicece']['national']['visits'] )}% )</td>
+              
             </tr>
         </tbody>
       </table>
-      #{legendHtml}
     "
 
     emptyCounty = {
-      "zones" => []
+      "zones" => [] 
     }
-    zoneTableHtml = "
-      <h2>Report for #{titleize(currentCountyName)} county</h2>
+    edZoneTableHtml = "
+      <h2>Education Report for #{titleize(currentCountyName)} county</h2>
       <table>
         <thead>
           <tr>
             <th>Zone</th>
             <th class='custSort'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
             <small>( Percentage of Target Visits)</small></th>
-            #{reportSettings['fluency']['subjects'].select{|x|x!="3" && !x.nil?}.map{ | subject |
-              "<th class='custSort'>
-                #{subjectLegend[subject]}<br>
-                Correct per minute<a href='#footer-note-3'><sup>[3]</sup></a><br>
-                #{"<small>( Percentage at KNEC benchmark<a href='#footer-note-4'><sup>[4]</sup></a>)</small>" if subject != "operation"}
-              </th>"
-            }.join}
           </tr>
         </thead>
         <tbody>
-          #{result['visits']['byCounty'][currentCountyId]['zones'].map{ | zoneId, zone |
+          #{result['visits']['dicece']['byCounty'][currentCountyId]['zones'].map{ | zoneId, zone |
 
             row += 1
 
             zoneName = zone['name']
             visits = zone['visits']
             quota = zone['quota']
-            met = zone['fluency']['metBenchmark']
-            sampleTotal = 0
-
-            # Do we still need this?
-            #nonFormalAsterisk = if formalZones[zone.downcase] then "<b>*</b>" else "" end
-
           "
-            <tr>
+            <tr> 
               <td>#{zoneName}</td>
               <td>#{visits} ( #{percentage( quota, visits )}% )</td>
-              #{reportSettings['fluency']['subjects'].select{|x|x!="3" && !x.nil?}.map{ | subject |
-                sample = zone['fluency'][subject]
-                if sample.nil?
-                  average = "no data"
-                else
-                  if sample && sample['size'] != 0 && sample['sum'] != 0
-                    sampleTotal += sample['size']
-                    average = ( sample['sum'] / sample['size'] ).round
-                  else
-                    average = '0'
-                  end
-
-                  if subject != 'operation'
-                    benchmark = sample['metBenchmark']
-                    percentage = "( #{percentage( sample['size'], benchmark )}% )"
-                  end
-                end
-
-                "<td>#{average} <span>#{percentage}</span></td>"
-              }.join}
+              
             </tr>
           "}.join }
         </tbody>
       </table>
-      #{legendHtml}
     "
 
+    healthCountyTableHtml = "
+      <table>
+        <thead>
+          <tr>
+            <th>County</th>
+            <th class='custSort'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
+            <small>( Percentage of Target Visits)</small></th>
+            
+          </tr>
+        </thead>
+        <tbody>
+          #{ result['visits']['cha']['byCounty'].map{ | countyId, county |
+
+            countyName      = county['name']
+            visits          = county['visits']
+            quota           = county['quota']
+            sampleTotal     = 0
+
+            "
+              <tr>
+                <td>#{titleize(countyName)}</td>
+                <td>#{visits} ( #{percentage( quota, visits )}% )</td>
+                
+              </tr>
+            "}.join }
+            <tr>
+              <td>All</td>
+              <td>#{result['visits']['cha']['national']['visits']} ( #{percentage( result['visits']['cha']['national']['quota'], result['visits']['cha']['national']['visits'] )}% )</td>
+            </tr>
+        </tbody>
+      </table>"
+
+    healthZoneTableHtml = "
+      <h2>Health Report for #{titleize(currentCountyName)} county</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Zone</th>
+            <th class='custSort'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
+            <small>( Percentage of Target Visits)</small></th>
+          </tr>
+        </thead>
+        <tbody>
+          #{result['visits']['cha']['byCounty'][currentCountyId]['zones'].map{ | zoneId, zone |
+
+            row += 1
+
+            zoneName = zone['name']
+            visits = zone['visits']
+            quota = zone['quota']
+          "
+            <tr> 
+              <td>#{zoneName}</td>
+              <td>#{visits} ( #{percentage( quota, visits )}% )</td>
+            </tr>
+          "}.join }
+        </tbody>
+      </table>"
+
     if county.downcase != "all"
-      contentHtml = zoneTableHtml
+      edContentHtml = edZoneTableHtml
+      healthContentHtml = healthZoneTableHtml
     else
-      contentHtml = countyTableHtml
+      edContentHtml = edCountyTableHtml
+      healthContentHtml = healthCountyTableHtml
     end
 
     html =  "
@@ -242,13 +219,16 @@ class Brockman < Sinatra::Base
         </head>
 
         <body>
-          <h1><img style='vertical-align:middle;' src=\"http://databases.tangerinecentral.org/tangerine/_design/ojai/images/corner_logo.png\" title=\"Go to main screen.\"> TUSOME</h1>
+          <h1><img style='vertical-align:middle;' src=\"http://databases.tangerinecentral.org/tangerine/_design/ojai/images/corner_logo.png\" title=\"Go to main screen.\"> TAYARI</h1>
 
-          #{contentHtml}
-          <p><a href='http://ntp.tangerinecentral.org/_csv/report/#{group}/#{workflowIds}/#{year}/#{month}/#{currentCountyId}.html'>View map and details</a></p>
+          #{edContentHtml}
+          <br/>
+          #{healthContentHtml}
+          <p><a href='http://tayari.tangerinecentral.org/_csv/report/#{group}/#{year}/#{month}/#{currentCountyId}.html'>View map and details</a></p>
         </body>
       </html>
-    "
+
+      "
 
     premailer = Premailer.new(html, 
       :with_html_string => true, 
@@ -264,14 +244,14 @@ class Brockman < Sinatra::Base
 
     if email
       
-
+      
       email.force_encoding("UTF-8")
       emailSubject.force_encoding("UTF-8")
       mailHtml.force_encoding("UTF-8")
       File.open('special.log', 'w') { |file| file.write("#{email.encoding}\n#{emailSubject.encoding}\n#{mailHtml.encoding}") }
       mail = Mail.deliver do
         to      email
-        from    'Tablets Programme <no-reply@tangerinecentral.org>'
+        from    'Tayari <no-reply@tayari.tangerinecentral.org>'
         subject emailSubject
 
         html_part do
