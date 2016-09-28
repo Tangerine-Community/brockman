@@ -208,36 +208,39 @@ class TayariReports
       return err(true, "CHA: Missing Zone")   if monthData['result']['visits']['cha']['byCounty'][countyId]['zones'][zoneId].nil?
       return err(true, "CHA: Missing Visits") if monthData['result']['visits']['cha']['byCounty'][countyId]['zones'][zoneId]['visits'].nil?
 
-      monthData['result']['visits']['cha']['byCounty'][countyId]['zones'][zoneId]['trips'].push "#{trip['id']}"
+      #if zoneId=="VqcyUU2U" or zoneId=="y8hYdwBy" or zoneId=="ZSFtQePZ" or zoneId=="F4rWDTye" or zoneId=="UQSd94DK" or zoneId=="BANwWH8Y" 
+        
+        monthData['result']['visits']['cha']['byCounty'][countyId]['zones'][zoneId]['trips'].push "#{trip['id']}"
       
-      monthData['result']['visits']['cha']['national']['visits']                                 += 1
-      monthData['result']['visits']['cha']['byCounty'][countyId]['visits']                       += 1
-      monthData['result']['visits']['cha']['byCounty'][countyId]['zones'][zoneId]['visits']      += 1
+        monthData['result']['visits']['cha']['national']['visits']                                 += 1
+        monthData['result']['visits']['cha']['byCounty'][countyId]['visits']                       += 1
+        monthData['result']['visits']['cha']['byCounty'][countyId]['zones'][zoneId]['visits']      += 1
 
-      #
-      # Process geoJSON data for mapping
-      #
+        #
+        # Process geoJSON data for mapping
+        #
 
-      if !trip['value']['gpsData'].nil?
-        point = trip['value']['gpsData']
+        if !trip['value']['gpsData'].nil?
+          point = trip['value']['gpsData']
 
-        if !@timezone.nil?
-          startDate = Time.at(trip['value']['minTime'].to_i / 1000).getlocal(@timezone)
-        else 
-          startDate = Time.at(trip['value']['minTime'].to_i / 1000)
+          if !@timezone.nil?
+            startDate = Time.at(trip['value']['minTime'].to_i / 1000).getlocal(@timezone)
+          else 
+            startDate = Time.at(trip['value']['minTime'].to_i / 1000)
+          end
+
+          point['role'] = userRole
+          point['properties'] = [
+            { 'label' => 'Date',            'value' => startDate.strftime("%d-%m-%Y %H:%M") },
+            { 'label' => 'County',          'value' => titleize(@locationList['locations'][countyId]['label'].downcase) },
+            { 'label' => 'Zone',            'value' => titleize(@locationList['locations'][countyId]['children'][subCountyId]['children'][zoneId]['label'].downcase) },
+            { 'label' => 'School',          'value' => titleize(@locationList['locations'][countyId]['children'][subCountyId]['children'][zoneId]['children'][schoolId]['label'].downcase) },
+            { 'label' => 'CHA',             'value' => titleize(trip['value']['user'].downcase) }
+          ]
+
+          monthData['geoJSON']['byCounty'][countyId]['data'].push point
         end
-
-        point['role'] = userRole
-        point['properties'] = [
-          { 'label' => 'Date',            'value' => startDate.strftime("%d-%m-%Y %H:%M") },
-          { 'label' => 'County',          'value' => titleize(@locationList['locations'][countyId]['label'].downcase) },
-          { 'label' => 'Zone',            'value' => titleize(@locationList['locations'][countyId]['children'][subCountyId]['children'][zoneId]['label'].downcase) },
-          { 'label' => 'School',          'value' => titleize(@locationList['locations'][countyId]['children'][subCountyId]['children'][zoneId]['children'][schoolId]['label'].downcase) },
-          { 'label' => 'CHA',             'value' => titleize(trip['value']['user'].downcase) }
-        ]
-
-        monthData['geoJSON']['byCounty'][countyId]['data'].push point
-      end
+      #end
 
     elsif userRole == "dicece"
       puts "** processing DICECE Trip"
@@ -278,6 +281,14 @@ class TayariReports
           point['properties'].push({ 'label' => 'Class',           'value' => trip['value']['class'] })
         end
 
+        if trip['value']['class']=="1"
+          point['properties'].push({ 'label' => 'Class',           'value' => "PP1" })
+        end
+
+        if trip['value']['class']=="2"
+          point['properties'].push({ 'label' => 'Class',           'value' => "PP2" })
+        end
+
         if !trip['value']['week'].nil?
           point['properties'].push({ 'label' => 'Week',           'value' => trip['value']['week'] })
         end
@@ -304,7 +315,6 @@ class TayariReports
     puts "Post-Processing Trips"
 
    
-
   end
 
 #

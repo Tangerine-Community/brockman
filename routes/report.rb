@@ -484,12 +484,13 @@ class Brockman < Sinatra::Base
             var countyQuota = safeRead(el.data.visits.cha.byCounty[county],'quota');
 
             if (countyVisits == 0 || countyQuota == 0){
-              tmpVisit['Visit Attainment'] = 0;
+              //tmpVisit['Visit Attainment'] = 0;
             } else {
               tmpVisit['Visit Attainment'] = countyVisits / countyQuota * 100;
+              datasetObservationsHealthCounty.push($.extend({}, tmp, tmpVisit));  
             }
 
-            datasetObservationsHealthCounty.push($.extend({}, tmp, tmpVisit));          
+                    
             
             //zone data
             var countyId  = '#{countyId}';
@@ -508,12 +509,13 @@ class Brockman < Sinatra::Base
               var zoneQuota = safeRead(el.data.visits.cha.byCounty[county].zones[zone],'quota');
 
               if (zoneVisits == 0 || zoneQuota == 0){
-              tmpZoneVisit['Visit Attainment'] = 0;
+              //tmpZoneVisit['Visit Attainment'] = 0;
               } else {
                 tmpZoneVisit['Visit Attainment'] = zoneVisits / zoneQuota * 100;
+                datasetObservationsHealthZone.push($.extend({}, tmpZoneData, tmpZoneVisit));
               }
               
-              datasetObservationsHealthZone.push($.extend({}, tmpZoneData, tmpZoneVisit));
+              
             }
 
           }
@@ -813,13 +815,17 @@ class Brockman < Sinatra::Base
             zoneName = zone['name']
             visits = zone['visits']
             quota = zone['quota']
+          if visits>0
+      
           "
             <tr> 
               <td>#{zoneName}</td>
               <td>#{visits} ( #{percentage( quota, visits )}% )</td>
               
             </tr>
-          "}.join }
+          " 
+          end 
+          }.join }
         </tbody>
       </table>
 
