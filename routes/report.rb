@@ -689,7 +689,7 @@ class Brockman < Sinatra::Base
         <thead>
           <tr>
             <th>County</th>
-            <th class='custSort'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
+            <th class='custSort' align='left'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
             <small>( Percentage of Target Visits)</small></th>
           </tr>
         </thead>
@@ -729,7 +729,7 @@ class Brockman < Sinatra::Base
         <thead>
           <tr>
             <th>Zone</th>
-            <th class='custSort'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
+            <th class='custSort' align='left'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
             <small>( Percentage of Target Visits)</small></th>
           </tr>
         </thead>
@@ -761,7 +761,7 @@ class Brockman < Sinatra::Base
         <thead>
           <tr>
             <th>County</th>
-            <th class='custSort'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
+            <th class='custSort' align='left'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
             <small>( Percentage of Target Visits)</small></th>
             
           </tr>
@@ -803,7 +803,7 @@ class Brockman < Sinatra::Base
         <thead>
           <tr>
             <th>Zone</th>
-            <th class='custSort'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
+            <th class='custSort' align='left'>Number of classroom visits<a href='#footer-note-1'><sup>[1]</sup></a><br>
             <small>( Percentage of Target Visits)</small></th>
           </tr>
         </thead>
@@ -815,7 +815,8 @@ class Brockman < Sinatra::Base
             zoneName = zone['name']
             visits = zone['visits']
             quota = zone['quota']
-          if visits>0
+
+          if zoneName=='Moiben' or zoneName=='West Ugenya' or zoneName=='Salama' or zoneName=='Kayole' or zoneName=='Mathare North'  or zoneName=='Baraka'
       
           "
             <tr> 
