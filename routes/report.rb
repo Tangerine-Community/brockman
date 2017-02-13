@@ -815,8 +815,6 @@ class Brockman < Sinatra::Base
             zoneName = zone['name']
             visits = zone['visits']
             quota = zone['quota']
-
-          if zoneName=='Moiben' or zoneName=='West Ugenya' or zoneName=='Salama' or zoneName=='Kayole' or zoneName=='Mathare North'  or zoneName=='Baraka'
       
           "
             <tr> 
@@ -825,7 +823,7 @@ class Brockman < Sinatra::Base
               
             </tr>
           " 
-          end 
+         
           }.join }
         </tbody>
       </table>
@@ -1118,6 +1116,7 @@ class Brockman < Sinatra::Base
           <option #{"selected" if year == "2014"}>2014</option>
           <option #{"selected" if year == "2015"}>2015</option>
           <option #{"selected" if year == "2016"}>2016</option>
+          <option #{"selected" if year == "2017"}>2017</option>
         </select>
 
         <label for='month-select'>Month</label>

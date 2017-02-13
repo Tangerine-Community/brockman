@@ -13,7 +13,7 @@ require "bundler"
 Bundler.require
 
 require_relative 'utilities/output'
-require_relative 'config'
+require_relative 'settings.rb'
 require_relative 'routes/init'
 
 $logger = Logger.new "Brockman.log"
@@ -27,14 +27,16 @@ class Brockman < Sinatra::Base
       :allow_credentials => true,
       :max_age           => "1728000",
       :protection        => { :except => :json_csrf },
-      :port              => 3141,
-      :cookie_options    => {:domain => "tangerinecentral.org"},
+      :port              => 4446,
+      :cookie_options    => {:domain => "tayari.tangerinecentral.org"},
       :env               => :production,
       :public_folder     => './public'
 
   get "/" do
     output "csv", false
   end
+
+  run! if __FILE__ == $0
 
 end
 
