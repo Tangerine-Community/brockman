@@ -224,7 +224,7 @@ class Brockman < Sinatra::Base
           #{edContentHtml}
           <br/>
           #{healthContentHtml}
-          <p><a href='http://tayari.tangerinecentral.org/_csv/report/#{group}/#{year}/#{month}/#{currentCountyId}.html'>View map and details</a></p>
+          <p><a href='http://tools.tayari-tangerine.tangerinecentral.org/_csv/report/#{group}/#{year}/#{month}/#{currentCountyId}.html'>View map and details</a></p>
         </body>
       </html>
 
@@ -251,7 +251,7 @@ class Brockman < Sinatra::Base
       File.open('special.log', 'w') { |file| file.write("#{email.encoding}\n#{emailSubject.encoding}\n#{mailHtml.encoding}") }
       mail = Mail.deliver do
         to      email
-        from    'Tayari <no-reply@tayari.tangerinecentral.org>'
+        from    'Tayari <no-reply@tools.tayari-tangerine.tangerinecentral.org>'
         subject emailSubject
 
         html_part do
