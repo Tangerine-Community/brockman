@@ -174,7 +174,7 @@ class TayariReports
 
     # handle case of irrelevant workflow 
     return err(true, "Incomplete or Invalid Workflow: #{workflowId}") if not workflows[workflowId]
-    return err(true, "Workflow does not get pre-processed: #{workflowId}") if not workflows[workflowId]
+    return err(true, "Workflow does not get pre-processed: #{workflowId}") if not workflows[workflowId]['reporting']
     return err(true, "Workflow does not get pre-processed: #{workflowId}") if not workflows[workflowId]['reporting']['preProcess']
 
     # validate user and role-workflow assocaition

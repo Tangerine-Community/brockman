@@ -209,7 +209,7 @@ class Brockman < Sinatra::Base
               var zoneQuota = safeRead(el.data.visits.dicece.byCounty[county].zones[zone],'quota');
 
               if (zoneVisits == 0 || zoneQuota == 0){
-              tmpZoneVisit['Visit Attainment'] = 0;
+                tmpZoneVisit['Visit Attainment'] = 0;
               } else {
                 if (county=='WUN6mJsU'){
                   tmpZoneVisit['Visit Attainment'] = (zoneVisits / zoneQuota * 100) / 2;
@@ -695,6 +695,7 @@ class Brockman < Sinatra::Base
     "
     #****************************** Education Report Components *************************
     row = 0
+    nairobiApbetQuota = 0
     edCountyTableHtml = "
       <table class='education-table'>
         <thead>
@@ -710,8 +711,11 @@ class Brockman < Sinatra::Base
             countyName      = county['name']
             visits          = county['visits']
 
+            
+
             if countyId == 'WUN6mJsU'
               quota           = county['quota']*2
+              nairobiApbetQuota = county['quota']
             else
               quota           = county['quota']
             end
@@ -725,7 +729,7 @@ class Brockman < Sinatra::Base
             "}.join }
             <tr>
               <td>All</td>
-              <td>#{result['visits']['dicece']['national']['visits']} ( #{percentage( result['visits']['dicece']['national']['quota'], result['visits']['dicece']['national']['visits'] )}% )</td>
+              <td>#{result['visits']['dicece']['national']['visits']} ( #{percentage( result['visits']['dicece']['national']['quota']+nairobiApbetQuota, result['visits']['dicece']['national']['visits'] )}% )</td>
               
             </tr>
         </tbody>

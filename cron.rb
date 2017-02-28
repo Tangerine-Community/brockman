@@ -36,7 +36,7 @@ END
 puts header
 
 groups = []
-groups.push({ 'db' => 'group-tayari', 'helper' => TayariReports, 'startYear' => 2016, 'endYear' => 2017 })
+groups.push({ 'db' => 'group-tayari', 'helper' => TayariReports, 'startYear' => 2015, 'endYear' => 2017 })
 
 
 #
