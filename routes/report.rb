@@ -181,7 +181,13 @@ class Brockman < Sinatra::Base
             if (countyVisits == 0 || countyQuota == 0){
               tmpVisit['Visit Attainment'] = 0;
             } else {
-              tmpVisit['Visit Attainment'] = countyVisits / countyQuota * 100;
+              if (county=='WUN6mJsU'){
+                tmpVisit['Visit Attainment'] = (countyVisits / countyQuota* 100 ) / 2 ;
+              }
+              else{
+                tmpVisit['Visit Attainment'] = countyVisits / countyQuota * 100;
+              }
+              
             }
 
             datasetObservationsEdCounty.push($.extend({}, tmp, tmpVisit));          
@@ -205,7 +211,12 @@ class Brockman < Sinatra::Base
               if (zoneVisits == 0 || zoneQuota == 0){
               tmpZoneVisit['Visit Attainment'] = 0;
               } else {
-                tmpZoneVisit['Visit Attainment'] = zoneVisits / zoneQuota * 100;
+                if (county=='WUN6mJsU'){
+                  tmpZoneVisit['Visit Attainment'] = (zoneVisits / zoneQuota * 100) / 2;
+                }
+                else{
+                  tmpZoneVisit['Visit Attainment'] = zoneVisits / zoneQuota * 100;
+                }
               }
               
               datasetObservationsEdZone.push($.extend({}, tmpZoneData, tmpZoneVisit));
@@ -698,7 +709,13 @@ class Brockman < Sinatra::Base
 
             countyName      = county['name']
             visits          = county['visits']
-            quota           = county['quota']
+
+            if countyId == 'WUN6mJsU'
+              quota           = county['quota']*2
+            else
+              quota           = county['quota']
+            end
+
 
             "
               <tr>
@@ -740,7 +757,14 @@ class Brockman < Sinatra::Base
 
             zoneName = zone['name']
             visits = zone['visits']
-            quota = zone['quota']
+
+            if currentCountyId == 'WUN6mJsU'
+              quota = zone['quota']*2
+            else
+              quota = zone['quota']
+            end
+
+            
           "
             <tr> 
               <td>#{zoneName}</td>
