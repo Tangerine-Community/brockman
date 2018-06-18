@@ -36,7 +36,7 @@ END
 puts header
 
 groups = []
-groups.push({ 'db' => 'group-national_tablet_program_test', 'helper' => TusomeReports, 'startYear' => 2018, 'endYear' => 2018 })
+groups.push({ 'db' => 'group-national_tablet_program', 'helper' => TusomeReports, 'startYear' => 2018, 'endYear' => 2018 })
 
 
 #
@@ -48,7 +48,7 @@ workflowStart = nil
 taskStart     = nil
 subTaskStart  = nil
 
-CHUNK_SIZE  = 1000
+CHUNK_SIZE  = 100
 
 groups.each { |group|
 
@@ -157,7 +157,7 @@ groups.each { |group|
 
 
   (group["startYear"]..group["endYear"]).each { |year| 
-    (5..5).each { |month|
+    (6..6).each { |month|
 
       helper.resetSkippedCount() if helper
 
@@ -225,7 +225,7 @@ groups.each { |group|
 
         puts "      # Trips: #{tripKeys.size}"
 
-         # break trip keys into chunks
+        # break trip keys into chunks
         tripKeyChunks = tripKeys.each_slice(CHUNK_SIZE).to_a
 
         # hash for optimization
@@ -234,14 +234,26 @@ groups.each { |group|
           'all' => {}
         }
 
-        tripRows = tripsFromMonth['rows']
-        
-        # Process each Trip result record in chunk
-        for trip in tripRows
-          helper.processTrip(trip, monthData, templates, workflows) if helper
-          #staff trips
-          #helper.processStaffTrip(trip, monthData, templates, workflows) if helper
-        end
+        tripKeyChunks.each { | tripKeys |
+
+          # get the real data
+          tripsResponse = couch.postRequest({
+            :view => "completedTripsById",
+            :params => { "reduce" => false }, 
+            :data => { "keys" => tripKeys },
+            :parseJson => true,
+            :cache => true
+          } )
+          tripRows = tripsResponse['rows']
+
+          puts "Processing Chunk:  #{tripRows.length}"
+          #puts "#{tripRows}"
+          # Process each Trip result record in chunk
+          for trip in tripRows
+            helper.processTrip(trip, monthData, templates, workflows) if helper
+          end
+
+        }
       }
       #post processing
       #puts "Processing Compensation"

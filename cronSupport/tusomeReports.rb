@@ -619,7 +619,7 @@ class TusomeReports
     zoneId        = templates['locationBySchool'][schoolId]['zoneId']        || ""
     subCountyId   = templates['locationBySchool'][schoolId]['subCountyId']   || ""
     countyId      = templates['locationBySchool'][schoolId]['countyId']      || ""
-    
+   
     #grade 3 instruments don't have class selection - pass value for the grade
     #grade 3 forms don't have grade selection in the input. Default to grade 3 to prevent nil errors
     if workflowId == "maths-grade3" or workflowId == "Gradethreeobservationtool"
@@ -769,7 +769,7 @@ class TusomeReports
           #itemsPerMinute = fluency['itemsPerMinute']
           benchmarked    = fluency['benchmarked']
           met            = fluency['metBenchmark']
-          total = fluency['itemsPerMinute']
+          total          = fluency['itemsPerMinute']
 
           obsClass = grade.to_i
 
@@ -1241,7 +1241,7 @@ class TusomeReports
           end
         }
 
-        if ((totalTime - timeLeft) / totalTime)  > 0
+        if ((totalTime - timeLeft) / totalTime)  != 0
           itemsPerMinute = (totalItems - (totalItems - correctItems)) / ((totalTime - timeLeft) / totalTime)  
         end
         
@@ -1254,38 +1254,31 @@ class TusomeReports
 
         #for each grid test pass out neccesasary values
         fluency['itemsPerMinute'] = ipm
-                
+        fluency['benchmarked']    = 1        
         #(30..120) === 
-        if Integer(ipm) >= 30  and 
-          subject == "english_word" and 
-          Integer(grade) == 1
-            fluency['metBenchmark'] += 1
-        end
-        #>=65 #(65..120) ===
-        if Integer(ipm) >= 65 and 
-          subject == "english_word" and 
-          Integer(grade) == 2
-            fluency['metBenchmark'] += 1
-        end
-
+        
         #check subject & benchmarks
-        if Integer(ipm) >= 17  and 
-          subject == "word" and 
-          Integer(grade) == 1
-            fluency['metBenchmark'] += 1
+        if Integer(ipm) >= 17  and subject == "word" and Integer(grade) == 1
+            fluency['metBenchmark'] = 1
         end
 
-        if Integer(ipm) >= 45  and 
-          subject == "word" and 
-          Integer(grade) == 2
-            fluency['metBenchmark'] += 1
+        if Integer(ipm) >= 30  and subject == "english_word" and Integer(grade) == 1
+            fluency['metBenchmark'] = 1
+        end
+
+        #>=65 #(65..120) ===
+        if Integer(ipm) >= 65 and subject == "english_word" and Integer(grade) == 2
+            fluency['metBenchmark'] = 1
+        end
+
+        if Integer(ipm) >= 45  and subject == "word" and Integer(grade) == 2
+            fluency['metBenchmark'] = 1
         end
         #check for english
         #if subject == 'english_word'
          # puts "Class: #{grade} - Ipm: #{fluency['itemsPerMinute']} MB: #{fluency['metBenchmark']}"
        # end 
 
-        fluency['benchmarked'] += 1
       #end
     end
     
