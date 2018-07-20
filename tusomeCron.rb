@@ -36,7 +36,7 @@ END
 puts header
 
 groups = []
-groups.push({ 'db' => 'group-national_tablet_program', 'helper' => TusomeReports, 'startYear' => 2018, 'endYear' => 2018 })
+groups.push({ 'db' => 'group-national_tablet_program_test', 'helper' => TusomeReports, 'startYear' => 2018, 'endYear' => 2018 })
 
 
 #
@@ -157,7 +157,7 @@ groups.each { |group|
 
 
   (group["startYear"]..group["endYear"]).each { |year| 
-    (6..6).each { |month|
+    (5..6).each { |month|
 
       helper.resetSkippedCount() if helper
 

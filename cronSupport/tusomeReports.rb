@@ -610,10 +610,6 @@ class TusomeReports
    
     return err(true, "User role does not match with workflow: #{username} | #{templates['users']['all'][username]['role']} - targets #{workflows[workflowId]['targetRoles']}") if not workflows[workflowId]['targetRoles'].include? userRole
 
-    # validate against the workflow constraints
-    validated = validateTrip(trip, workflows[workflowId])
-    return err(true, "Trip did not validate against workflow constraints") if not validated
-
     return err(true, "School was not found in database") if templates['locationBySchool'][schoolId].nil?
 
     zoneId        = templates['locationBySchool'][schoolId]['zoneId']        || ""
@@ -643,6 +639,10 @@ class TusomeReports
     end 
 
     if userRole == "coach" or userRole == "cso" or userRole == "other"      
+       # validate against the workflow constraints
+      validated = validateTrip(trip, workflows[workflowId])
+      return err(true, "Trip did not validate against workflow constraints") if not validated
+
       #skip these steps if either the county or zone are no longer in the primary list 
       return err(false, "Missing County") if monthData['result']['visits']['byCounty'][countyId].nil?
       return err(false, "Missing Zones")  if monthData['result']['visits']['byCounty'][countyId]['zones'].nil?
@@ -1172,7 +1172,7 @@ class TusomeReports
 
                 compensation = 0
                 #tac tutor
-                if role == 'tac-tutor' or role == 'cso'
+                if role == 'cso'
                   
                   completePct = (visits + 0.0) / teachers
                                     
@@ -1180,11 +1180,11 @@ class TusomeReports
           
                   #compute compensation for primary zone - additional Ksh 500 
                   if visitZoneId == zoneId
-                      compensation  = (((completePct > 1) ? 1 : completePct) * 10000 + 500).round(2)
+                      compensation  = (((completePct > 1) ? 1 : completePct) * 12000 + 500).round(2)
                       #puts "User: #{userName} Vists: #{visits} Quota: #{quota} Rate: #{completePct} Reimbursement PZ: #{compensation}"
                   else 
                       #compute compensation for secondary zones - less Ksh 500
-                      compensation = (((completePct > 1) ? 1 : completePct) * 10000).round(2)
+                      compensation = (((completePct > 1) ? 1 : completePct) * 12000).round(2)
                       #puts "User: #{userName} Vists: #{visits} Quota: #{quota} Rate: #{completePct} Reimbursement SZ: #{compensation}"
                   end
                 elsif role == 'coach' 
@@ -1214,7 +1214,7 @@ class TusomeReports
 
   end
 
-  #
+  # if e['value'] == 'on'
   # For each grid test - Count the correct words read, 
   # the number of leaners assessed which is equal to 1 and 
   # if the benchmark for the subject and grade have been met
@@ -1230,55 +1230,63 @@ class TusomeReports
 
     if !item['value'].nil?
         #get total items
-        totalItems = item['value'].length
+        totalItems = item['value'].size
 
         totalTime = item['duration']
         timeLeft  = item['timeRemaining']
-          
-        item['value'].map { | e |  
+        
+        #make time to float
+        totalTime = totalTime*1.0
+        timeLeft  = timeLeft
+
+        item['value'].map { | e | 
+
+          if e['highlighted'] == true
+            break
+          end
+
           if e['pressed'] == false
-            correctItems  += 1
+              correctItems  += 1
+            #puts "#{grade} - #{correctItems} - #{totalItems}"
           end
         }
 
-        if ((totalTime - timeLeft) / totalTime)  != 0
+        if ((totalTime - timeLeft) / totalTime) != 0
           itemsPerMinute = (totalItems - (totalItems - correctItems)) / ((totalTime - timeLeft) / totalTime)  
         end
         
-        ipm = itemsPerMinute.to_i
+        ipm = itemsPerMinute
 
         #ignore and exit function where ipm is greater than 120
-        if Integer(ipm) >=120
+        if ipm > 120
           return
         end
-
+        #puts "ipm- #{ipm}"
         #for each grid test pass out neccesasary values
         fluency['itemsPerMinute'] = ipm
         fluency['benchmarked']    = 1        
         #(30..120) === 
         
         #check subject & benchmarks
-        if Integer(ipm) >= 17  and subject == "word" and Integer(grade) == 1
+        if ipm >= 17 and subject == "word" and grade == 1
+            fluency['metBenchmark'] = 1
+        end
+        
+        if ipm >= 30  and subject == "english_word" and grade == 1
+          fluency['metBenchmark'] = 1
+        end
+
+        if ipm >= 65 and subject == "english_word" and grade == 2
             fluency['metBenchmark'] = 1
         end
 
-        if Integer(ipm) >= 30  and subject == "english_word" and Integer(grade) == 1
+        if ipm >= 45  and subject == "word" and grade == 2
             fluency['metBenchmark'] = 1
         end
-
+        
         #>=65 #(65..120) ===
-        if Integer(ipm) >= 65 and subject == "english_word" and Integer(grade) == 2
-            fluency['metBenchmark'] = 1
-        end
-
-        if Integer(ipm) >= 45  and subject == "word" and Integer(grade) == 2
-            fluency['metBenchmark'] = 1
-        end
-        #check for english
-        #if subject == 'english_word'
-         # puts "Class: #{grade} - Ipm: #{fluency['itemsPerMinute']} MB: #{fluency['metBenchmark']}"
-       # end 
-
+        
+        
       #end
     end
     
@@ -1301,21 +1309,24 @@ class TusomeReports
     #
     #Get grid tests only from the trip values
     #
-    results.map { | items |
-      items['inputs'].map { |item|  
+    if trip['value']['form']['complete'] == true
+      results.map { | items |
+      
+        items['inputs'].map { |item|  
 
-        if item['mode'] == 'TANGY_TIMED_MODE_DISABLED'  
-          gridFluencyRates = itemsPerMinute(item, grade, subject)
-            
-          if !gridFluencyRates.nil?
-            fluency['itemsPerMinute'] += gridFluencyRates['itemsPerMinute']
-            fluency['benchmarked']    += gridFluencyRates['benchmarked']
-            fluency['metBenchmark']   += gridFluencyRates['metBenchmark']
+          if item['mode'] == 'TANGY_TIMED_MODE_DISABLED'
+            gridFluencyRates = itemsPerMinute(item, grade, subject)
+              
+            if !gridFluencyRates.nil?
+              fluency['itemsPerMinute'] += gridFluencyRates['itemsPerMinute']
+              fluency['benchmarked']    += gridFluencyRates['benchmarked']
+              fluency['metBenchmark']   += gridFluencyRates['metBenchmark']
+            end
           end
-          
-        end
+        }
       }
-    }
+    end
+    
     #puts "-----"
     return fluency
   end

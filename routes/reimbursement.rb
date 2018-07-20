@@ -87,7 +87,7 @@ class Brockman < Sinatra::Base
             <thead>
               <tr>
                 <th>County</th>
-                <th>Number of classroom visits / valid</th>
+                <th>Number of valid classroom visits / valid</th>
                 <th>Number of Teachers</th>
                 <th>Total Reimbursement</th>
               </tr>
@@ -123,7 +123,7 @@ class Brockman < Sinatra::Base
         <thead>
           <tr>
             <th>Zone</th>
-            <th>TAC Tutor Username</th>
+            <th>CSO/Coach Name</th>
             <th>M-Pesa Number</th>
             <th>Number of classroom visits / valid</a></th>
             <th>Number of Teachers</th>
