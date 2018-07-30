@@ -1000,20 +1000,22 @@ class Brockman < Sinatra::Base
                     
         end
 
-        cl3Allsample = result['visits']['maths']['national']['fluency']['class']['3']['operation']
-        if cl3Allsample.nil?
-                    cl3Allaverage = "no data"
-        else
-          if cl3Allsample && cl3Allsample['size'] != 0 && cl3Allsample['sum'] != 0
-              cl3AllsampleTotal = cl3Allsample['size']
-              cl3Allaverage = ( cl3Allsample['sum'] / cl3Allsample['size'] ).round
+        if !result['visits']['maths']['national']['fluency']['class']['3'].nil?
+          cl3Allsample = result['visits']['maths']['national']['fluency']['class']['3']['operation']
+          if cl3Allsample.nil?
+                      cl3Allaverage = "no data"
           else
-            cl3Allaverage = '0'
+            if cl3Allsample && cl3Allsample['size'] != 0 && cl3Allsample['sum'] != 0
+                cl3AllsampleTotal = cl3Allsample['size']
+                cl3Allaverage = ( cl3Allsample['sum'] / cl3Allsample['size'] ).round
+            else
+              cl3Allaverage = '0'
+            end
+                      
+            cl3Allbenchmark = cl3Allsample['metBenchmark']
+            cl3Allpercentage = "( #{percentage( cl3Allsample['size'], cl3Allbenchmark )}% )"
+                      
           end
-                    
-          cl3Allbenchmark = cl3Allsample['metBenchmark']
-          cl3Allpercentage = "( #{percentage( cl3Allsample['size'], cl3Allbenchmark )}% )"
-                    
         end
     else
       cl1Allaverage = "no data"
@@ -1417,7 +1419,7 @@ class Brockman < Sinatra::Base
               layerControl: L.control.layers.provided(['OpenStreetMap.Mapnik','Stamen.Watercolor']),
               markers: L.markerClusterGroup(),
               layerGeoJsonFilter: function(feature, layer){
-                return (feature.role === 'tac-tutor' || feature.role === 'cso' || feature.role === 'coach');
+                return (feature.role === 'cso' || feature.role === 'coach');
               }
             },
             maths: {
