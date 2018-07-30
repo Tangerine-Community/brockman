@@ -1417,7 +1417,7 @@ class Brockman < Sinatra::Base
               layerControl: L.control.layers.provided(['OpenStreetMap.Mapnik','Stamen.Watercolor']),
               markers: L.markerClusterGroup(),
               layerGeoJsonFilter: function(feature, layer){
-                return (feature.role === 'tac-tutor' || feature.role === 'coach');
+                return (feature.role === 'tac-tutor' || feature.role === 'cso' || feature.role === 'coach');
               }
             },
             maths: {

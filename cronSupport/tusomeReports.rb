@@ -699,9 +699,9 @@ class TusomeReports
             point = gpsData
 
             if !@timezone.nil?
-              startDate = Time.at(trip['value']['startUnixtime'].to_i / 1000).getlocal(@timezone)
+              startDate = Time.at(trip['value']['start_time'].to_i / 1000).getlocal(@timezone)
             else 
-              startDate = Time.at(trip['value']['startUnixtime'].to_i / 1000)
+              startDate = Time.at(trip['value']['start_time'].to_i / 1000)
             end
 
             point['role'] = "maths"
@@ -735,9 +735,9 @@ class TusomeReports
             point = gpsData
 
             if !@timezone.nil?
-              startDate = Time.at(trip['value']['startUnixtime'].to_i / 1000).getlocal(@timezone)
+              startDate = Time.at(trip['value']['start_time'].to_i / 1000).getlocal(@timezone)
             else 
-              startDate = Time.at(trip['value']['startUnixtime'].to_i / 1000)
+              startDate = Time.at(trip['value']['start_time'].to_i / 1000)
             end
 
             point['role'] = userRole
