@@ -1728,6 +1728,7 @@ class Brockman < Sinatra::Base
           <option #{"selected" if year == "2016"}>2016</option>
           <option #{"selected" if year == "2017"}>2017</option>
           <option #{"selected" if year == "2018"}>2018</option>
+          <option #{"selected" if year == "2019"}>2019</option>
         </select>
 
         <label for='month-select'>Month</label>
